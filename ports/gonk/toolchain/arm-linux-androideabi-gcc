@@ -1,0 +1,5 @@
+#!/bin/bash
+path="dirname `realpath $0`"
+source `$path`/environment
+
+exec $TOOLCHAIN/bin/arm-linux-androideabi-gcc $CPPFLAGS $CXXFLAGS $LDFLAGS "$@"

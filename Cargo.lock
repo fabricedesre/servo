@@ -5,6 +5,7 @@ dependencies = [
  "compositing 0.0.1",
  "gfx 0.0.1",
  "glfw_app 0.0.1",
+ "gonk_app 0.0.1",
  "layout 0.0.1",
  "msg 0.0.1",
  "net 0.0.1",
@@ -250,6 +251,18 @@ version = "0.0.1"
 source = "git+https://github.com/servo/rust-glx#e2ce3d297260ccd23fcb4627f6ed218b68e1095f"
 dependencies = [
  "gl_generator 0.0.1 (git+https://github.com/bjz/gl-rs.git)",
+]
+
+[[package]]
+name = "gonk_app"
+version = "0.0.1"
+dependencies = [
+ "alert 0.1.0 (git+https://github.com/servo/rust-alert)",
+ "compositing 0.0.1",
+ "geom 0.1.0 (git+https://github.com/servo/rust-geom)",
+ "layers 0.1.0 (git+https://github.com/servo/rust-layers)",
+ "msg 0.0.1",
+ "util 0.0.1",
 ]
 
 [[package]]

@@ -1,0 +1,7 @@
+#!/bin/bash
+path="dirname `realpath $0`"
+source `$path`/environment
+
+echo "LDFLAGS is $LDFLAGS"
+
+exec $TOOLCHAIN/bin/arm-linux-androideabi-g++ $CPPFLAGS $CXXFLAGS $LDFLAGS "$@"

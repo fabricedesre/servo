@@ -78,6 +78,7 @@ class CommandBase(object):
 
         self.config.setdefault("build", {})
         self.config["build"].setdefault("android", False)
+        self.config["build"].setdefault("gonk", False)
 
         self.config["build"].setdefault("debug-mozjs", False)
 
@@ -85,6 +86,10 @@ class CommandBase(object):
         self.config["android"].setdefault("sdk", "")
         self.config["android"].setdefault("ndk", "")
         self.config["android"].setdefault("toolchain", "")
+
+        self.config.setdefault("gonk", {})
+        self.config["gonk"].setdefault("toolchain", "")
+        # (fabrice)TODO: add other default values.
 
     _rust_snapshot_path = None
     _cargo_build_id = None
@@ -131,13 +136,33 @@ class CommandBase(object):
                                           os.pathsep,
                                           env.get("LD_LIBRARY_PATH", ""))
 
+        # We can't build for Android and Gonk at the same time.
+        if self.config["build"]["android"] and self.config["build"]["gonk"]:
+            raise Exception("Can't build for Android and Gonk at the same time. Pick one!")
+
         # Paths to Android build tools:
-        if self.config["android"]["sdk"]:
-            env["ANDROID_SDK"] = self.config["android"]["sdk"]
-        if self.config["android"]["ndk"]:
-            env["ANDROID_NDK"] = self.config["android"]["ndk"]
-        if self.config["android"]["toolchain"]:
-            env["ANDROID_TOOLCHAIN"] = self.config["android"]["toolchain"]
+        if self.config["build"]["android"]:
+            if self.config["android"]["sdk"]:
+                env["ANDROID_SDK"] = self.config["android"]["sdk"]
+            if self.config["android"]["ndk"]:
+                env["ANDROID_NDK"] = self.config["android"]["ndk"]
+            if self.config["android"]["toolchain"]:
+                env["ANDROID_TOOLCHAIN"] = self.config["android"]["toolchain"]
+
+        # Environment for Gonk build:
+        if self.config["build"]["gonk"]:
+            if self.config["gonk"]["system-gonk"]:
+                #toolchain = path.join(self.context.topdir, "ports/gonk/toolchain")
+                env["GONK_PATH"] = self.config["gonk"]["system-gonk"]
+                env["GONK_MOZJS_TOOLCHAIN_PREFIX"] = "%s%s" % (self.config["gonk"]["toolchain"], "/bin/arm-linux-androideabi-")
+                #env["PATH"] = "%s%s%s" % (toolchain, ":", env["PATH"])
+                #env["GONK_TOOLCHAIN_PREFIX"] = "%s%s" % (self.config["gonk"]["toolchain"], "/bin/arm-linux-androideabi-")
+                env["GONK_PRODUCT"] = self.config["gonk"]["product"]
+                env["GONK_SYSROOT"] = "/home/fabrice/dev/B2G/prebuilts/ndk/9/platforms/android-18/arch-arm"
+                env["PATH"] = "%s%s%s" % (self.config["gonk"]["toolchain"], "/bin:", env["PATH"])
+                env["CFLAGS"] = "-I/home/fabrice/dev/B2G/prebuilts/ndk/9/platforms/android-18/arch-arm/usr/include"
+                env["CXXFLAGS"] = "-I/home/fabrice/dev/B2G/bionic -I/home/fabrice/dev/B2G/external/stlport/stlport -I/home/fabrice/dev/B2G/prebuilts/ndk/9/platforms/android-18/arch-arm/usr/include"
+                env["LDFLAGS"] = "-L/home/fabrice/dev/B2G/out/target/product/flame/obj/lib"
 
         return env
 

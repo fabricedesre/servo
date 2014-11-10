@@ -31,6 +31,10 @@ class MachCommands(CommandBase):
                      default=None,
                      action='store_true',
                      help='Build for Android')
+    @CommandArgument('--gonk',
+                     default=None,
+                     action='store_true',
+                     help='Build for Gonk')
     @CommandArgument('--debug-mozjs',
                      default=None,
                      action='store_true',
@@ -39,11 +43,14 @@ class MachCommands(CommandBase):
                      action='store_true',
                      help='Print verbose output')
     def build(self, target=None, release=False, jobs=None, android=None,
-              verbose=False, debug_mozjs=False):
+              gonk=None, verbose=False, debug_mozjs=False):
         self.ensure_bootstrapped()
 
         if android is None:
             android = self.config["build"]["android"]
+
+        if gonk is None:
+            gonk = self.config["build"]["gonk"]
 
         opts = []
         if release:
@@ -69,6 +76,13 @@ class MachCommands(CommandBase):
                 make_opts += ["CARGO_OPTS=" + " ".join(opts)]
             status = subprocess.call(
                 ["make", "-C", "ports/android"] + make_opts,
+                env=self.build_env())
+        if gonk:
+            make_opts = []
+            if opts:
+                make_opts += ["CARGO_OPTS=" + " ".join(opts)]
+            status = subprocess.call(
+                ["make", "-C", "ports/gonk", "build"] + make_opts,
                 env=self.build_env())
         else:
             status = subprocess.call(
@@ -140,3 +154,15 @@ class MachCommands(CommandBase):
             opts += ["-v"]
 
         return subprocess.call(["cargo", "clean"] + opts, env=self.build_env())
+    @Command('flash',
+             description='Flash Gonk Servo',
+             category='build')
+    def flash(self):
+        build_start = time()
+        status = subprocess.call(
+            ["make", "-C", "ports/gonk", "flash"] ,
+            env=self.build_env())
+        elapsed = time() - build_start
+
+        print("Flash completed in %0.2fs" % elapsed)
+        return status

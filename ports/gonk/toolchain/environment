@@ -1,0 +1,16 @@
+# common environment variables.
+
+TOOLCHAIN=${GONK_PATH}/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.7/
+
+STLPORT_CPPFLAGS="-I${GONK_PATH}/ndk/sources/cxx-stl/stlport/stlport -I${GONK_PATH}/ndk/sources/cxx-stl/system/include"
+STLPORT_LIBS="-lstlport"
+
+# TODO: autodetect
+ARCH_DIR=arch-arm
+
+CPPFLAGS="-DANDROID -isystem ${GONK_PATH}/bionic/libc/$ARCH_DIR/include -isystem ${GONK_PATH}/bionic/libc/include/ -isystem ${GONK_PATH}/bionic/libc/kernel/common -isystem ${GONK_PATH}/bionic/libc/kernel/$ARCH_DIR -isystem ${GONK_PATH}/bionic/libm/include -I${GONK_PATH}/frameworks/base/native/include -I${GONK_PATH}/system/core/include -isystem ${GONK_PATH}/bionic $CPPFLAGS -I${GONK_PATH}/external/valgrind/fxos-include"
+CFLAGS="-mandroid -fno-short-enums -fno-exceptions $CFLAGS"
+CXXFLAGS="-mandroid -fno-short-enums -fno-exceptions -Wno-psabi $CXXFLAGS $STLPORT_CPPFLAGS"
+LIBS="$LIBS $STLPORT_LIBS"
+
+LDFLAGS="-mandroid -L${GONK_PATH}/out/target/product/$GONK_PRODUCT/obj/lib -Wl,-rpath-link=${GONK_PATH}/out/target/product/$GONK_PRODUCT/obj/lib --sysroot=${GONK_PATH}/out/target/product/$GONK_PRODUCT/obj/ -llog $LDFLAGS"

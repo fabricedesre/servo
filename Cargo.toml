@@ -25,7 +25,9 @@ path = "tests/contenttest.rs"
 harness = false
 
 [features]
-default = ["glfw_app"]
+# default = ["glfw_app"]
+default = ["gonk", "gonk_app"]
+gonk = []
 
 [dependencies.compositing]
 path = "components/compositing"
@@ -52,5 +54,13 @@ path = "components/gfx"
 path = "ports/glfw"
 optional = true
 
+[dependencies.gonk_app]
+path = "ports/gonk/app"
+optional = true
+
 [dependencies.url]
 git = "https://github.com/servo/rust-url"
+
+[target.arm-linux-androideabi]
+linker = "/home/fabrice/dev/servo/ports/gonk/toolchain/arm-linux-androideabi-g++"
+ar     = "/home/fabrice/dev/servo/ports/gonk/toolchain/arm-linux-androideabi-ar"

@@ -1,0 +1,41 @@
+[package]
+name = "gonk_app"
+version = "0.0.1"
+authors = ["The Servo Project Developers"]
+
+[lib]
+name = "gonk_app"
+path = "main.rs"
+crate-type = ["rlib"]
+
+[features]
+default = ["gonk"]
+gonk = []
+
+[dependencies.alert]
+git = "https://github.com/servo/rust-alert"
+
+[dependencies.compositing]
+path = "../../../components/compositing"
+
+[dependencies.geom]
+git = "https://github.com/servo/rust-geom"
+
+# [dependencies.glut]
+# git = "https://github.com/servo/rust-glut"
+
+[dependencies.layers]
+git = "https://github.com/servo/rust-layers"
+
+[dependencies.msg]
+path = "../../../components/msg"
+
+# [dependencies.servo]
+# path = "../../.."
+# default-features = false
+
+[dependencies.util]
+path = "../../../components/util"
+
+# [dependencies.egl]
+# git = "https://github.com/servo/rust-egl"
