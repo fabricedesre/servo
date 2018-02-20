@@ -193,6 +193,9 @@ pub mod shorthands {
             spec="https://drafts.csswg.org/css-cascade-3/#all-shorthand"
         )
     %>
+
+    /// The max amount of longhands that the `all` shorthand will ever contain.
+    pub const ALL_SHORTHAND_MAX_LEN: usize = ${len(logical_longhands + other_longhands)};
 }
 
 <%
@@ -793,14 +796,12 @@ bitflags! {
         /// This property has values that can establish a containing block for
         /// absolutely positioned elements.
         const ABSPOS_CB = 1 << 2;
-        /// This shorthand property is an alias of another property.
-        const SHORTHAND_ALIAS_PROPERTY = 1 << 3;
         /// This longhand property applies to ::first-letter.
-        const APPLIES_TO_FIRST_LETTER = 1 << 4;
+        const APPLIES_TO_FIRST_LETTER = 1 << 3;
         /// This longhand property applies to ::first-line.
-        const APPLIES_TO_FIRST_LINE = 1 << 5;
+        const APPLIES_TO_FIRST_LINE = 1 << 4;
         /// This longhand property applies to ::placeholder.
-        const APPLIES_TO_PLACEHOLDER = 1 << 6;
+        const APPLIES_TO_PLACEHOLDER = 1 << 5;
     }
 }
 
@@ -1687,17 +1688,10 @@ impl ToCss for VariableDeclaration {
     {
         // https://drafts.csswg.org/css-variables/#variables-in-shorthands
         match self.value.from_shorthand {
-            // Normally, we shouldn't be printing variables here if they came from
-            // shorthands. But we should allow properties that came from shorthand
-            // aliases. That also matches with the Gecko behavior.
-            // FIXME(emilio): This is just a hack for `-moz-transform`.
-            Some(shorthand) if shorthand.flags().contains(PropertyFlags::SHORTHAND_ALIAS_PROPERTY) => {
-                dest.write_str(&*self.value.css)?
-            }
             None => {
                 dest.write_str(&*self.value.css)?
             }
-            _ => {},
+            Some(..) => {},
         }
         Ok(())
     }
@@ -1768,20 +1762,11 @@ impl PropertyDeclaration {
     fn with_variables_from_shorthand(&self, shorthand: ShorthandId) -> Option< &str> {
         match *self {
             PropertyDeclaration::WithVariables(ref declaration) => {
-                if let Some(s) = declaration.value.from_shorthand {
-                    if s == shorthand {
-                        Some(&*declaration.value.css)
-                    } else { None }
-                } else {
-                    // Normally, longhand property that doesn't come from a shorthand
-                    // should return None here. But we return Some to longhands if they
-                    // came from a shorthand alias. Because for example, we should be able to
-                    // get -moz-transform's value from transform.
-                    if shorthand.flags().contains(PropertyFlags::SHORTHAND_ALIAS_PROPERTY) {
-                        return Some(&*declaration.value.css);
-                    }
-                    None
+                let s = declaration.value.from_shorthand?;
+                if s != shorthand {
+                    return None;
                 }
+                Some(&*declaration.value.css)
             },
             _ => None,
         }

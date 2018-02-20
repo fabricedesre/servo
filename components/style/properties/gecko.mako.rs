@@ -62,6 +62,7 @@ use values::computed::{NonNegativeLength, ToComputedValue, Percentage};
 use values::computed::font::{FontSize, SingleFontFamily};
 use values::computed::effects::{BoxShadow, Filter, SimpleShadow};
 use values::computed::outline::OutlineStyle;
+use values::generics::position::ZIndex;
 use values::generics::transform::TransformStyle;
 use computed_values::border_style;
 
@@ -968,10 +969,7 @@ def set_gecko_property(ffi_name, expr):
 <%
 transform_functions = [
     ("Matrix3D", "matrix3d", ["number"] * 16),
-    ("PrefixedMatrix3D", "matrix3d", ["number"] * 12 + ["lopon"] * 2
-                                        + ["lon"] + ["number"]),
     ("Matrix", "matrix", ["number"] * 6),
-    ("PrefixedMatrix", "matrix", ["number"] * 4 + ["lopon"] * 2),
     ("Translate", "translate", ["lop", "optional_lop"]),
     ("Translate3D", "translate3d", ["lop", "lop", "length"]),
     ("TranslateX", "translatex", ["lop"]),
@@ -1027,8 +1025,6 @@ transform_functions = [
             #       need to cast it to f32.
             "integer_to_percentage" : "bindings::Gecko_CSSValue_SetPercentage(%s, %s as f32)",
             "lop" : "%s.set_lop(%s)",
-            "lopon" : "set_lopon(%s, %s)",
-            "lon" : "set_lon(%s, %s)",
             "angle" : "%s.set_angle(%s)",
             "number" : "bindings::Gecko_CSSValue_SetNumber(%s, %s)",
             # Note: We use nsCSSValueSharedList here, instead of nsCSSValueList_heap
@@ -1106,16 +1102,7 @@ transform_functions = [
             field_names = ["from_list", "to_list", "count"]
 
     %>
-    <%
-
-        guard = ""
-        if name == "Matrix3D" or name == "Matrix":
-            guard = "if !needs_prefix "
-        elif name == "PrefixedMatrix3D" or name == "PrefixedMatrix":
-            guard = "if needs_prefix "
-
-    %>
-    structs::nsCSSKeyword::eCSSKeyword_${keyword} ${guard}=> {
+    structs::nsCSSKeyword::eCSSKeyword_${keyword} => {
         ::values::generics::transform::TransformOperation::${name}${pre_symbols}
         % for index, item in enumerate(items):
             % if keyword == "matrix3d":
@@ -1149,7 +1136,6 @@ fn set_single_transform_function(
     servo_value: &values::computed::TransformOperation,
     gecko_value: &mut structs::nsCSSValue /* output */
 ) {
-    use values::computed::{Length, LengthOrNumber, LengthOrPercentage, LengthOrPercentageOrNumber};
     use values::computed::TransformOperation;
     use values::generics::transform::{Matrix, Matrix3D};
 
@@ -1158,22 +1144,6 @@ fn set_single_transform_function(
         set_single_transform_function(item, &mut value);
         value
     };
-
-    unsafe fn set_lopon(css: &mut structs::nsCSSValue, lopon: LengthOrPercentageOrNumber) {
-        let lop = match lopon {
-            Either::First(number) => LengthOrPercentage::Length(Length::new(number)),
-            Either::Second(lop) => lop,
-        };
-        css.set_lop(lop);
-    }
-
-    unsafe fn set_lon(css: &mut structs::nsCSSValue, lopon: LengthOrNumber) {
-        let length = match lopon {
-            Either::Second(number) => Length::new(number),
-            Either::First(l) => l,
-        };
-        bindings::Gecko_CSSValue_SetPixelLength(css, length.px())
-    }
 
     unsafe {
         match *servo_value {
@@ -1226,19 +1196,6 @@ fn clone_single_transform_function(
 
     let transform_function = unsafe {
         bindings::Gecko_CSSValue_GetKeyword(bindings::Gecko_CSSValue_GetArrayItemConst(gecko_value, 0))
-    };
-
-    let needs_prefix = if transform_function == structs::nsCSSKeyword::eCSSKeyword_matrix3d {
-        unsafe {
-            bindings::Gecko_CSSValue_GetArrayItemConst(gecko_value, 13).mUnit
-                    != structs::nsCSSUnit::eCSSUnit_Number ||
-            bindings::Gecko_CSSValue_GetArrayItemConst(gecko_value, 14).mUnit
-                    != structs::nsCSSUnit::eCSSUnit_Number ||
-            bindings::Gecko_CSSValue_GetArrayItemConst(gecko_value, 15).mUnit
-                    != structs::nsCSSUnit::eCSSUnit_Number
-        }
-    } else {
-        false
     };
 
     unsafe {
@@ -1794,8 +1751,8 @@ fn static_assert() {
 
     pub fn set_z_index(&mut self, v: longhands::z_index::computed_value::T) {
         match v {
-            Either::First(n) => self.gecko.mZIndex.set_value(CoordDataValue::Integer(n)),
-            Either::Second(Auto) => self.gecko.mZIndex.set_value(CoordDataValue::Auto),
+            ZIndex::Integer(n) => self.gecko.mZIndex.set_value(CoordDataValue::Integer(n)),
+            ZIndex::Auto => self.gecko.mZIndex.set_value(CoordDataValue::Auto),
         }
     }
 
@@ -1815,11 +1772,11 @@ fn static_assert() {
 
     pub fn clone_z_index(&self) -> longhands::z_index::computed_value::T {
         return match self.gecko.mZIndex.as_value() {
-            CoordDataValue::Integer(n) => Either::First(n),
-            CoordDataValue::Auto => Either::Second(Auto),
+            CoordDataValue::Integer(n) => ZIndex::Integer(n),
+            CoordDataValue::Auto => ZIndex::Auto,
             _ => {
                 debug_assert!(false);
-                Either::First(0)
+                ZIndex::Integer(0)
             }
         }
     }
