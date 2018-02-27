@@ -64,6 +64,7 @@ use values::computed::effects::{BoxShadow, Filter, SimpleShadow};
 use values::computed::outline::OutlineStyle;
 use values::generics::column::ColumnCount;
 use values::generics::position::ZIndex;
+use values::generics::text::MozTabSize;
 use values::generics::transform::TransformStyle;
 use computed_values::border_style;
 
@@ -1447,18 +1448,18 @@ impl Clone for ${style_struct.gecko_struct_name} {
 
     # Types used with predefined_type()-defined properties that we can auto-generate.
     predefined_types = {
+        "Color": impl_color,
+        "GreaterThanOrEqualToOneNumber": impl_simple,
+        "Integer": impl_simple,
         "length::LengthOrAuto": impl_style_coord,
         "length::LengthOrNormal": impl_style_coord,
         "length::NonNegativeLengthOrAuto": impl_style_coord,
         "length::NonNegativeLengthOrNormal": impl_style_coord,
-        "GreaterThanOrEqualToOneNumber": impl_simple,
         "Length": impl_absolute_length,
-        "Position": impl_position,
+        "LengthOrNormal": impl_style_coord,
         "LengthOrPercentage": impl_style_coord,
         "LengthOrPercentageOrAuto": impl_style_coord,
         "LengthOrPercentageOrNone": impl_style_coord,
-        "LengthOrNone": impl_style_coord,
-        "LengthOrNormal": impl_style_coord,
         "MaxLength": impl_style_coord,
         "MozLength": impl_style_coord,
         "MozScriptMinSize": impl_absolute_length,
@@ -1466,9 +1467,9 @@ impl Clone for ${style_struct.gecko_struct_name} {
         "NonNegativeLengthOrPercentage": impl_style_coord,
         "NonNegativeNumber": impl_simple,
         "Number": impl_simple,
-        "Integer": impl_simple,
         "Opacity": impl_simple,
-        "Color": impl_color,
+        "Perspective": impl_style_coord,
+        "Position": impl_position,
         "RGBAColor": impl_rgba_color,
         "SVGLength": impl_svg_length,
         "SVGOpacity": impl_svg_opacity,
@@ -4792,13 +4793,11 @@ fn static_assert() {
 
     #[allow(non_snake_case)]
     pub fn set__moz_tab_size(&mut self, v: longhands::_moz_tab_size::computed_value::T) {
-        use values::Either;
-
         match v {
-            Either::Second(non_negative_number) => {
+            MozTabSize::Number(non_negative_number) => {
                 self.gecko.mTabSize.set_value(CoordDataValue::Factor(non_negative_number.0));
             }
-            Either::First(non_negative_length) => {
+            MozTabSize::Length(non_negative_length) => {
                 self.gecko.mTabSize.set(non_negative_length);
             }
         }
@@ -4806,11 +4805,9 @@ fn static_assert() {
 
     #[allow(non_snake_case)]
     pub fn clone__moz_tab_size(&self) -> longhands::_moz_tab_size::computed_value::T {
-        use values::Either;
-
         match self.gecko.mTabSize.as_value() {
-            CoordDataValue::Coord(coord) => Either::First(Au(coord).into()),
-            CoordDataValue::Factor(number) => Either::Second(From::from(number)),
+            CoordDataValue::Coord(coord) => MozTabSize::Length(Au(coord).into()),
+            CoordDataValue::Factor(number) => MozTabSize::Number(From::from(number)),
             _ => unreachable!(),
         }
     }

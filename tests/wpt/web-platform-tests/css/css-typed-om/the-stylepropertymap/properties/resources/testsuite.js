@@ -145,22 +145,6 @@ const gTestSyntaxExamples = {
       }
     ],
   },
-  '<image>': {
-    description: 'an image',
-    examples: [
-      {
-        description: "a PNG image",
-        input: new CSSURLImageValue('/media/1x1.png'),
-        defaultComputed: (_, result) => {
-          // URLs compute to absolute URLs
-          assert_true(result instanceof CSSURLImageValue,
-            'Computed value should be a CSSURLImageValue');
-          assert_true(result.url.endsWith('/media/1x1.png'),
-            'Computed value should be an absolute URL');
-        }
-      }
-    ],
-  },
   '<transform>': {
     description: 'a transform',
     examples: [
@@ -218,6 +202,24 @@ function testPropertyValid(propertyName, examples, specified, computed, descript
   }, `Can set '${propertyName}' to ${description}`);
 }
 
+// We have to special case CSSImageValue as they cannot be created with a
+// constructor and are completely opaque.
+function testIsImageValidForProperty(propertyName) {
+  test(t => {
+    let element1 = createDivWithStyle(t, `${propertyName}: url("/media/1x1-green.png")`);
+    let element2 = createDivWithStyle(t);
+
+    const result = element1.attributeStyleMap.get(propertyName);
+    assert_not_equals(result, null, 'Image value must not be null');
+    assert_class_string(result, 'CSSImageValue',
+      'Image value must be a CSSImageValue');
+
+    element2.attributeStyleMap.set(propertyName, result);
+    assert_equals(element2.style[propertyName], element1.style[propertyName],
+      'Image value can be set on different element');
+  }, `Can set '${propertyName}' to an image`);
+}
+
 // Test that styleMap.set throws for invalid values
 function testPropertyInvalid(propertyName, examples, description) {
   test(t => {
@@ -226,6 +228,25 @@ function testPropertyInvalid(propertyName, examples, description) {
       assert_throws(new TypeError(), () => styleMap.set(propertyName, example.input));
     }
   }, `Setting '${propertyName}' to ${description} throws TypeError`);
+}
+
+// Test that styleMap.get/.set roundtrips correctly for unsupported values.
+function testUnsupportedValue(propertyName, cssText) {
+  test(t => {
+    let element1 = createDivWithStyle(t);
+    let element2 = createDivWithStyle(t);
+
+    element1.style[propertyName] = cssText;
+    const result = element1.attributeStyleMap.get(propertyName);
+    assert_not_equals(result, null,
+      'Unsupported value must not be null');
+    assert_class_string(result, 'CSSStyleValue',
+      'Unsupported value must be a CSSStyleValue and not one of its subclasses');
+
+    element2.attributeStyleMap.set(propertyName, result);
+    assert_equals(element2.style[propertyName], element1.style[propertyName],
+      'Unsupported value can be set on different element');
+  }, `'${propertyName}' does not supported '${cssText}'`);
 }
 
 function createKeywordExample(keyword) {
@@ -270,6 +291,12 @@ function runPropertyTests(propertyName, testCases) {
     'CSS-wide keywords');
 
   for (const testCase of testCases) {
+    // <image> is a special case
+    if (testCase.syntax === '<image>') {
+      testIsImageValidForProperty(propertyName);
+      continue;
+    }
+
     // Retrieve test examples for this test case's syntax. If the syntax
     // looks like a keyword, then create an example on the fly.
     const syntaxExamples = testCase.syntax.match(/^[a-z\-]+$/) ?
@@ -295,5 +322,15 @@ function runPropertyTests(propertyName, testCases) {
         syntaxExamples.examples,
         syntaxExamples.description);
     }
+  }
+}
+
+// Check that |propertyName| doesn't "support" examples in |testExamples|.
+// |testExamples| is a list of CSS string values. An "unsupported" value
+// doesn't have a corresponding Typed OM representation. It normalizes as
+// the base CSSStyleValue.
+function runUnsupportedPropertyTests(propertyName, testExamples) {
+  for (const cssText of testExamples) {
+    testUnsupportedValue(propertyName, cssText);
   }
 }
