@@ -264,13 +264,12 @@ impl HTMLIFrameElement {
         let (browsing_context_id, top_level_browsing_context_id) =
             if is_auth_webview {
             let top_level_browsing_context_id = TopLevelBrowsingContextId::new();
+            let browsing_context_id: BrowsingContextId = top_level_browsing_context_id.into();
 
             // Add a webviewid attribute with the pipeline id for this frame.
             self.upcast::<Element>().set_attribute(&LocalName::from("webviewid"),
-                                                   AttrValue::String(format!("{:?}", top_level_browsing_context_id)));
+                AttrValue::String(format!("{}-{}", browsing_context_id.namespace_id.0, browsing_context_id.index.0.get())));
 
-            
-            let browsing_context_id: BrowsingContextId = top_level_browsing_context_id.into();
             println!("** Webview top_level_browsing_context_id is {:?}", top_level_browsing_context_id);
             (browsing_context_id, top_level_browsing_context_id)
         } else {
