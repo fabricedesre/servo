@@ -800,6 +800,16 @@ pub enum LonghandId {
     % endfor
 }
 
+impl ToCss for LonghandId {
+    #[inline]
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
+    {
+        dest.write_str(self.name())
+    }
+}
+
 impl fmt::Debug for LonghandId {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str(self.name())
@@ -821,7 +831,7 @@ impl LonghandId {
         INHERITED.contains(*self)
     }
 
-    fn shorthands(&self) -> &'static [ShorthandId] {
+    fn shorthands(&self) -> NonCustomPropertyIterator<ShorthandId> {
         // first generate longhand to shorthands lookup map
         //
         // NOTE(emilio): This currently doesn't exclude the "all" shorthand. It
@@ -862,15 +872,21 @@ impl LonghandId {
             ];
         % endfor
 
-        match *self {
-            % for property in data.longhands:
-                LonghandId::${property.camel_case} => ${property.ident.upper()},
-            % endfor
+        NonCustomPropertyIterator {
+            filter: NonCustomPropertyId::from(*self).enabled_for_all_content(),
+            iter: match *self {
+                % for property in data.longhands:
+                    LonghandId::${property.camel_case} => ${property.ident.upper()},
+                % endfor
+            }.iter(),
         }
     }
 
-    fn parse_value<'i, 't>(&self, context: &ParserContext, input: &mut Parser<'i, 't>)
-                           -> Result<PropertyDeclaration, ParseError<'i>> {
+    fn parse_value<'i, 't>(
+        &self,
+        context: &ParserContext,
+        input: &mut Parser<'i, 't>,
+    ) -> Result<PropertyDeclaration, ParseError<'i>> {
         match *self {
             % for property in data.longhands:
                 LonghandId::${property.camel_case} => {
@@ -1100,13 +1116,46 @@ impl LonghandId {
     }
 }
 
+/// An iterator over all the property ids that are enabled for a given
+/// shorthand, if that shorthand is enabled for all content too.
+pub struct NonCustomPropertyIterator<Item: 'static> {
+    filter: bool,
+    iter: ::std::slice::Iter<'static, Item>,
+}
+
+impl<Item> Iterator for NonCustomPropertyIterator<Item>
+where
+    Item: 'static + Copy + Into<NonCustomPropertyId>,
+{
+    type Item = Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let id = *self.iter.next()?;
+            if !self.filter || id.into().enabled_for_all_content() {
+                return Some(id)
+            }
+        }
+    }
+}
+
 /// An identifier for a given shorthand property.
-#[derive(Clone, Copy, Debug, Eq, Hash, MallocSizeOf, PartialEq, ToCss)]
+#[derive(Clone, Copy, Debug, Eq, Hash, MallocSizeOf, PartialEq)]
 pub enum ShorthandId {
     % for property in data.shorthands:
         /// ${property.name}
         ${property.camel_case},
     % endfor
+}
+
+impl ToCss for ShorthandId {
+    #[inline]
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
+    {
+        dest.write_str(self.name())
+    }
 }
 
 impl ShorthandId {
@@ -1127,7 +1176,7 @@ impl ShorthandId {
     }
 
     /// Get the longhand ids that form this shorthand.
-    pub fn longhands(&self) -> &'static [LonghandId] {
+    pub fn longhands(&self) -> NonCustomPropertyIterator<LonghandId> {
         % for property in data.shorthands:
             static ${property.ident.upper()}: &'static [LonghandId] = &[
                 % for sub in property.sub_properties:
@@ -1135,10 +1184,13 @@ impl ShorthandId {
                 % endfor
             ];
         % endfor
-        match *self {
-            % for property in data.shorthands:
-                ShorthandId::${property.camel_case} => ${property.ident.upper()},
-            % endfor
+        NonCustomPropertyIterator {
+            filter: NonCustomPropertyId::from(*self).enabled_for_all_content(),
+            iter: match *self {
+                % for property in data.shorthands:
+                    ShorthandId::${property.camel_case} => ${property.ident.upper()},
+                % endfor
+            }.iter()
         }
     }
 
@@ -1271,7 +1323,7 @@ pub enum DeclaredValue<'a, T: 'a> {
 /// extra discriminant word) and synthesize dependent DeclaredValues for
 /// PropertyDeclaration instances as needed.
 #[cfg_attr(feature = "gecko", derive(MallocSizeOf))]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, ToCss)]
 pub enum DeclaredValueOwned<T> {
     /// A known specified value from the stylesheet.
     Value(T),
@@ -1306,6 +1358,19 @@ pub struct UnparsedValue {
     url_data: UrlExtraData,
     /// The shorthand this came from.
     from_shorthand: Option<ShorthandId>,
+}
+
+impl ToCss for UnparsedValue {
+    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
+    where
+        W: Write,
+    {
+        // https://drafts.csswg.org/css-variables/#variables-in-shorthands
+        if self.from_shorthand.is_none() {
+            dest.write_str(&*self.css)?;
+        }
+        Ok(())
+    }
 }
 
 impl UnparsedValue {
@@ -1373,25 +1438,6 @@ impl UnparsedValue {
     }
 }
 
-impl<'a, T: ToCss> ToCss for DeclaredValue<'a, T> {
-    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-    where
-        W: Write,
-    {
-        match *self {
-            DeclaredValue::Value(ref inner) => inner.to_css(dest),
-            DeclaredValue::WithVariables(ref with_variables) => {
-                // https://drafts.csswg.org/css-variables/#variables-in-shorthands
-                if with_variables.from_shorthand.is_none() {
-                    dest.write_str(&*with_variables.css)?
-                }
-                Ok(())
-            },
-            DeclaredValue::CSSWideKeyword(ref keyword) => keyword.to_css(dest),
-        }
-    }
-}
-
 /// An identifier for a given property declaration, which can be either a
 /// longhand or a custom property.
 #[derive(Clone, Copy, PartialEq)]
@@ -1441,7 +1487,7 @@ impl<'a> PropertyDeclarationId<'a> {
     /// shorthand.
     pub fn is_longhand_of(&self, shorthand: ShorthandId) -> bool {
         match *self {
-            PropertyDeclarationId::Longhand(ref id) => id.shorthands().contains(&shorthand),
+            PropertyDeclarationId::Longhand(ref id) => id.shorthands().any(|s| s == shorthand),
             _ => false,
         }
     }
@@ -1661,64 +1707,33 @@ impl PropertyId {
 
 /// A declaration using a CSS-wide keyword.
 #[cfg_attr(feature = "gecko", derive(MallocSizeOf))]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, ToCss)]
 pub struct WideKeywordDeclaration {
+    #[css(skip)]
     id: LonghandId,
     keyword: CSSWideKeyword,
 }
 
-impl ToCss for WideKeywordDeclaration {
-    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-    where
-        W: fmt::Write,
-    {
-        self.keyword.to_css(dest)
-    }
-}
-
 /// An unparsed declaration that contains `var()` functions.
 #[cfg_attr(feature = "gecko", derive(MallocSizeOf))]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, ToCss)]
 pub struct VariableDeclaration {
+    #[css(skip)]
     id: LonghandId,
     #[cfg_attr(feature = "gecko", ignore_malloc_size_of = "XXX: how to handle this?")]
     value: Arc<UnparsedValue>,
 }
 
-impl ToCss for VariableDeclaration {
-    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-    where
-        W: fmt::Write,
-    {
-        // https://drafts.csswg.org/css-variables/#variables-in-shorthands
-        match self.value.from_shorthand {
-            None => {
-                dest.write_str(&*self.value.css)?
-            }
-            Some(..) => {},
-        }
-        Ok(())
-    }
-}
-
 /// A custom property declaration with the property name and the declared value.
 #[cfg_attr(feature = "gecko", derive(MallocSizeOf))]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, ToCss)]
 pub struct CustomDeclaration {
     /// The name of the custom property.
+    #[css(skip)]
     pub name: ::custom_properties::Name,
     /// The value of the custom property.
     #[cfg_attr(feature = "gecko", ignore_malloc_size_of = "XXX: how to handle this?")]
     pub value: DeclaredValueOwned<Arc<::custom_properties::SpecifiedValue>>,
-}
-
-impl ToCss for CustomDeclaration {
-    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-    where
-        W: fmt::Write,
-    {
-        self.value.borrow().to_css(dest)
-    }
 }
 
 impl fmt::Debug for PropertyDeclaration {
@@ -1952,7 +1967,7 @@ impl PropertyDeclaration {
                     if id == ShorthandId::All {
                         declarations.all_shorthand = AllShorthand::CSSWideKeyword(keyword)
                     } else {
-                        for &longhand in id.longhands() {
+                        for longhand in id.longhands() {
                             declarations.push(PropertyDeclaration::CSSWideKeyword(
                                 WideKeywordDeclaration {
                                     id: longhand,
@@ -1983,7 +1998,7 @@ impl PropertyDeclaration {
                             if id == ShorthandId::All {
                                 declarations.all_shorthand = AllShorthand::WithVariables(unparsed)
                             } else {
-                                for &id in id.longhands() {
+                                for id in id.longhands() {
                                     declarations.push(
                                         PropertyDeclaration::WithVariables(VariableDeclaration {
                                             id,

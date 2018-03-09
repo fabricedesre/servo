@@ -235,6 +235,7 @@ use gecko_bindings::structs::nscoord;
 use gecko_bindings::structs::nsresult;
 use gecko_bindings::structs::Loader;
 use gecko_bindings::structs::LoaderReusableStyleSheets;
+use gecko_bindings::structs::SheetLoadData;
 use gecko_bindings::structs::ServoStyleSheet;
 use gecko_bindings::structs::ServoComputedData;
 use gecko_bindings::structs::ServoStyleContext;
@@ -607,7 +608,6 @@ extern "C" {
 extern "C" {
     pub fn Gecko_IsSignificantChild(
         node: RawGeckoNodeBorrowed,
-        text_is_significant: bool,
         whitespace_is_significant: bool,
     ) -> bool;
 }
@@ -664,6 +664,7 @@ extern "C" {
     pub fn Gecko_LoadStyleSheet(
         loader: *mut Loader,
         parent: *mut ServoStyleSheet,
+        parent_load_data: *mut SheetLoadData,
         reusable_sheets: *mut LoaderReusableStyleSheets,
         base_url_data: *mut RawGeckoURLExtraData,
         url_bytes: *const u8,
@@ -1139,10 +1140,7 @@ extern "C" {
     pub fn Gecko_ReleaseImageValueArbitraryThread(aPtr: *mut ImageValue);
 }
 extern "C" {
-    pub fn Gecko_ImageValue_Create(
-        aURI: ServoBundledURI,
-        aURIString: ServoRawOffsetArc<RustString>,
-    ) -> *mut ImageValue;
+    pub fn Gecko_ImageValue_Create(aURI: ServoBundledURI) -> *mut ImageValue;
 }
 extern "C" {
     pub fn Gecko_ImageValue_SizeOfIncludingThis(aImageValue: *mut ImageValue) -> usize;
@@ -1380,7 +1378,7 @@ extern "C" {
     pub fn Gecko_NewShapeImage(shape: *mut StyleShapeSource);
 }
 extern "C" {
-    pub fn Gecko_StyleShapeSource_SetURLValue(shape: *mut StyleShapeSource, uri: ServoBundledURI);
+    pub fn Gecko_StyleShapeSource_SetURLValue(shape: *mut StyleShapeSource, uri: *mut URLValue);
 }
 extern "C" {
     pub fn Gecko_ResetFilters(effects: *mut nsStyleEffects, new_len: usize);
@@ -1389,13 +1387,13 @@ extern "C" {
     pub fn Gecko_CopyFiltersFrom(aSrc: *mut nsStyleEffects, aDest: *mut nsStyleEffects);
 }
 extern "C" {
-    pub fn Gecko_nsStyleFilter_SetURLValue(effects: *mut nsStyleFilter, uri: ServoBundledURI);
+    pub fn Gecko_nsStyleFilter_SetURLValue(effects: *mut nsStyleFilter, uri: *mut URLValue);
 }
 extern "C" {
     pub fn Gecko_nsStyleSVGPaint_CopyFrom(dest: *mut nsStyleSVGPaint, src: *const nsStyleSVGPaint);
 }
 extern "C" {
-    pub fn Gecko_nsStyleSVGPaint_SetURLValue(paint: *mut nsStyleSVGPaint, uri: ServoBundledURI);
+    pub fn Gecko_nsStyleSVGPaint_SetURLValue(paint: *mut nsStyleSVGPaint, uri: *mut URLValue);
 }
 extern "C" {
     pub fn Gecko_nsStyleSVGPaint_Reset(paint: *mut nsStyleSVGPaint);
@@ -1414,6 +1412,9 @@ extern "C" {
 }
 extern "C" {
     pub fn Gecko_NewURLValue(uri: ServoBundledURI) -> *mut URLValue;
+}
+extern "C" {
+    pub fn Gecko_URLValue_SizeOfIncludingThis(url: *mut URLValue) -> usize;
 }
 extern "C" {
     pub fn Gecko_AddRefCSSURLValueArbitraryThread(aPtr: *mut URLValue);
@@ -1524,7 +1525,7 @@ extern "C" {
     pub fn Gecko_CSSValue_SetArray(css_value: nsCSSValueBorrowedMut, len: i32);
 }
 extern "C" {
-    pub fn Gecko_CSSValue_SetURL(css_value: nsCSSValueBorrowedMut, uri: ServoBundledURI);
+    pub fn Gecko_CSSValue_SetURL(css_value: nsCSSValueBorrowedMut, uri: *mut URLValue);
 }
 extern "C" {
     pub fn Gecko_CSSValue_SetInt(css_value: nsCSSValueBorrowedMut, integer: i32, unit: nsCSSUnit);
@@ -1685,9 +1686,6 @@ extern "C" {
 }
 extern "C" {
     pub fn Gecko_RegisterNamespace(ns: *mut nsAtom) -> i32;
-}
-extern "C" {
-    pub fn Gecko_ShouldCreateStyleThreadPool() -> bool;
 }
 extern "C" {
     pub fn Gecko_Construct_Default_nsStyleFont(
@@ -2093,6 +2091,7 @@ extern "C" {
     pub fn Servo_StyleSheet_FromUTF8Bytes(
         loader: *mut Loader,
         gecko_stylesheet: *mut ServoStyleSheet,
+        load_data: *mut SheetLoadData,
         data: *const u8,
         data_len: usize,
         parsing_mode: SheetParsingMode,

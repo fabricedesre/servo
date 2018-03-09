@@ -21,16 +21,14 @@ use properties::longhands;
 use properties::longhands::font_weight::computed_value::T as FontWeight;
 use properties::longhands::font_stretch::computed_value::T as FontStretch;
 use properties::longhands::visibility::computed_value::T as Visibility;
-#[cfg(feature = "gecko")]
 use properties::PropertyId;
 use properties::{LonghandId, ShorthandId};
 use servo_arc::Arc;
 use smallvec::SmallVec;
 use std::{cmp, ptr};
-use std::fmt::{self, Write};
 use std::mem::{self, ManuallyDrop};
 #[cfg(feature = "gecko")] use hash::FnvHashMap;
-use style_traits::{CssWriter, ParseError, ToCss};
+use style_traits::ParseError;
 use super::ComputedValues;
 use values::{CSSFloat, CustomIdent, Either};
 use values::animated::{Animate, Procedure, ToAnimatedValue, ToAnimatedZero};
@@ -80,7 +78,7 @@ pub fn nscsspropertyid_is_animatable(property: nsCSSPropertyID) -> bool {
 /// a shorthand with at least one transitionable longhand component, or an unsupported property.
 // NB: This needs to be here because it needs all the longhands generated
 // beforehand.
-#[derive(Clone, Debug, Eq, Hash, MallocSizeOf, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, MallocSizeOf, PartialEq, ToComputedValue, ToCss)]
 pub enum TransitionProperty {
     /// A shorthand.
     Shorthand(ShorthandId),
@@ -91,35 +89,11 @@ pub enum TransitionProperty {
     Unsupported(CustomIdent),
 }
 
-impl ToCss for TransitionProperty {
-    fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-    where
-        W: Write,
-    {
-        match *self {
-            TransitionProperty::Shorthand(ref id) => dest.write_str(id.name()),
-            TransitionProperty::Longhand(ref id) => dest.write_str(id.name()),
-            TransitionProperty::Unsupported(ref id) => id.to_css(dest),
-        }
-    }
-}
-
-trivial_to_computed_value!(TransitionProperty);
-
 impl TransitionProperty {
     /// Returns `all`.
     #[inline]
     pub fn all() -> Self {
         TransitionProperty::Shorthand(ShorthandId::All)
-    }
-
-    /// Iterates over each longhand property.
-    pub fn each<F: FnMut(&LonghandId) -> ()>(mut cb: F) {
-        % for prop in data.longhands:
-            % if prop.transitionable:
-                cb(&LonghandId::${prop.camel_case});
-            % endif
-        % endfor
     }
 
     /// Parse a transition-property value.
@@ -300,11 +274,11 @@ impl AnimatedProperty {
     /// Get an animatable value from a transition-property, an old style, and a
     /// new style.
     pub fn from_longhand(
-        property: &LonghandId,
+        property: LonghandId,
         old_style: &ComputedValues,
         new_style: &ComputedValues,
     ) -> Option<AnimatedProperty> {
-        Some(match *property {
+        Some(match property {
             % for prop in data.longhands:
             % if prop.animatable:
                 LonghandId::${prop.camel_case} => {
@@ -646,10 +620,10 @@ impl AnimationValue {
 
     /// Get an AnimationValue for an AnimatableLonghand from a given computed values.
     pub fn from_computed_values(
-        property: &LonghandId,
+        property: LonghandId,
         computed_values: &ComputedValues
     ) -> Option<Self> {
-        Some(match *property {
+        Some(match property {
             % for prop in data.longhands:
             % if prop.animatable:
             LonghandId::${prop.camel_case} => {
@@ -835,7 +809,7 @@ impl Animate for Visibility {
 impl ComputeSquaredDistance for Visibility {
     #[inline]
     fn compute_squared_distance(&self, other: &Self) -> Result<SquaredDistance, ()> {
-        Ok(SquaredDistance::Value(if *self == *other { 0. } else { 1. }))
+        Ok(SquaredDistance::from_sqrt(if *self == *other { 0. } else { 1. }))
     }
 }
 
@@ -1945,7 +1919,7 @@ impl ComputeSquaredDistance for Quaternion {
         // so we can get their angle difference by:
         // cos(theta/2) = (q1 dot q2) / (|q1| * |q2|) = q1 dot q2.
         let distance = self.dot(other).max(-1.0).min(1.0).acos() * 2.0;
-        Ok(SquaredDistance::Value(distance * distance))
+        Ok(SquaredDistance::from_sqrt(distance))
     }
 }
 
@@ -3088,15 +3062,17 @@ impl ComputeSquaredDistance for AnimatedFilterList {
 ///   border-top-color, border-color, border-top, border
 ///
 /// [property-order] https://drafts.csswg.org/web-animations/#calculating-computed-keyframes
-#[cfg(feature = "gecko")]
 pub fn compare_property_priority(a: &PropertyId, b: &PropertyId) -> cmp::Ordering {
     match (a.as_shorthand(), b.as_shorthand()) {
         // Within shorthands, sort by the number of subproperties, then by IDL name.
         (Ok(a), Ok(b)) => {
-            let subprop_count_a = a.longhands().len();
-            let subprop_count_b = b.longhands().len();
-            subprop_count_a.cmp(&subprop_count_b).then_with(
-                || get_idl_name_sort_order(&a).cmp(&get_idl_name_sort_order(&b)))
+            let subprop_count_a = a.longhands().count();
+            let subprop_count_b = b.longhands().count();
+            subprop_count_a
+                .cmp(&subprop_count_b)
+                .then_with(|| {
+                    get_idl_name_sort_order(a).cmp(&get_idl_name_sort_order(b))
+                })
         },
 
         // Longhands go before shorthands.
@@ -3109,8 +3085,7 @@ pub fn compare_property_priority(a: &PropertyId, b: &PropertyId) -> cmp::Orderin
     }
 }
 
-#[cfg(feature = "gecko")]
-fn get_idl_name_sort_order(shorthand: &ShorthandId) -> u32 {
+fn get_idl_name_sort_order(shorthand: ShorthandId) -> u32 {
 <%
 # Sort by IDL name.
 sorted_shorthands = sorted(data.shorthands, key=lambda p: to_idl_name(p.ident))
@@ -3118,7 +3093,7 @@ sorted_shorthands = sorted(data.shorthands, key=lambda p: to_idl_name(p.ident))
 # Annotate with sorted position
 sorted_shorthands = [(p, position) for position, p in enumerate(sorted_shorthands)]
 %>
-    match *shorthand {
+    match shorthand {
         % for property, position in sorted_shorthands:
             ShorthandId::${property.camel_case} => ${position},
         % endfor

@@ -5837,6 +5837,18 @@
      {}
     ]
    ],
+   "css/table_rowspan_notequal_a.html": [
+    [
+     "/_mozilla/css/table_rowspan_notequal_a.html",
+     [
+      [
+       "/_mozilla/css/table_rowspan_notequal_ref.html",
+       "!="
+      ]
+     ],
+     {}
+    ]
+   ],
    "css/table_rowspan_rowgroup_a.html": [
     [
      "/_mozilla/css/table_rowspan_rowgroup_a.html",
@@ -9752,6 +9764,11 @@
     ]
    ],
    "css/table_row_direction_ref.html": [
+    [
+     {}
+    ]
+   ],
+   "css/table_rowspan_notequal_ref.html": [
     [
      {}
     ]
@@ -39127,6 +39144,12 @@
      {}
     ]
    ],
+   "mozilla/table_rowspan_colspan_crashtest.html": [
+    [
+     "/_mozilla/mozilla/table_rowspan_colspan_crashtest.html",
+     {}
+    ]
+   ],
    "mozilla/textcontent.html": [
     [
      "/_mozilla/mozilla/textcontent.html",
@@ -63932,6 +63955,14 @@
    "e045db1f738850e516079b66f915ba314b54ed99",
    "support"
   ],
+  "css/table_rowspan_notequal_a.html": [
+   "ec7ab6318a498f6b88369f097af53a0626c6fb1d",
+   "reftest"
+  ],
+  "css/table_rowspan_notequal_ref.html": [
+   "2a07facbd9f417264b46f6419ab00593051dae56",
+   "support"
+  ],
   "css/table_rowspan_rowgroup_a.html": [
    "aadc4cdd09585330446dd231452c04810833f586",
    "reftest"
@@ -70739,6 +70770,10 @@
   "mozilla/svg/svg_ref.html": [
    "f43703402d539a05a55990cd2a03c50eabea122b",
    "support"
+  ],
+  "mozilla/table_rowspan_colspan_crashtest.html": [
+   "6890b7ec8b29dd5fb02c8e93035728f2b5bf8668",
+   "testharness"
   ],
   "mozilla/table_valign_bottom.html": [
    "43814fb9c385f2501ff88673acf4b58079670015",

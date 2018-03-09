@@ -35,9 +35,10 @@
         % endif
         #[allow(unused_variables)]
         #[inline]
-        pub fn parse<'i, 't>(context: &ParserContext,
-                             input: &mut Parser<'i, 't>)
-                             -> Result<SpecifiedValue, ParseError<'i>> {
+        pub fn parse<'i, 't>(
+            context: &ParserContext,
+            input: &mut Parser<'i, 't>,
+        ) -> Result<SpecifiedValue, ParseError<'i>> {
             % if allow_quirks:
             specified::${type}::${parse_method}_quirky(context, input, AllowQuirks::Yes)
             % elif needs_context:
@@ -82,8 +83,6 @@
                           need_animatable=need_animatable, **kwargs)">
         #[allow(unused_imports)]
         use smallvec::SmallVec;
-        use std::fmt::{self, Write};
-        use style_traits::{CssWriter, Separator, ToCss};
 
         pub mod single_value {
             #[allow(unused_imports)]
@@ -117,11 +116,19 @@
             use values::computed::ComputedVecIter;
 
             /// The computed value, effectively a list of single values.
-            #[derive(Clone, Debug, MallocSizeOf, PartialEq)]
+            % if separator == "Comma":
+            #[css(comma)]
+            % endif
+            #[derive(Clone, Debug, MallocSizeOf, PartialEq, ToCss)]
             % if need_animatable or animation_value_type == "ComputedValue":
             #[derive(Animate, ComputeSquaredDistance)]
             % endif
             pub struct T(
+                % if not allow_empty:
+                #[css(iterable)]
+                % else:
+                #[css(if_empty = "none", iterable)]
+                % endif
                 % if allow_empty and allow_empty != "NotInitial":
                 pub Vec<single_value::T>,
                 % else:
@@ -153,55 +160,19 @@
             }
         }
 
-        impl ToCss for computed_value::T {
-            fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-            where
-                W: Write,
-            {
-                let mut iter = self.0.iter();
-                if let Some(val) = iter.next() {
-                    val.to_css(dest)?;
-                } else {
-                    % if allow_empty:
-                        dest.write_str("none")?;
-                    % else:
-                        warn!("Found empty value for property ${name}");
-                    % endif
-                }
-                for i in iter {
-                    dest.write_str(::style_traits::${separator}::separator())?;
-                    i.to_css(dest)?;
-                }
-                Ok(())
-            }
-        }
-
         /// The specified value of ${name}.
-        #[derive(Clone, Debug, MallocSizeOf, PartialEq)]
-        pub struct SpecifiedValue(pub Vec<single_value::SpecifiedValue>);
-
-        impl ToCss for SpecifiedValue {
-            fn to_css<W>(&self, dest: &mut CssWriter<W>) -> fmt::Result
-            where
-                W: Write,
-            {
-                let mut iter = self.0.iter();
-                if let Some(val) = iter.next() {
-                    val.to_css(dest)?;
-                } else {
-                    % if allow_empty:
-                        dest.write_str("none")?;
-                    % else:
-                        warn!("Found empty value for property ${name}");
-                    % endif
-                }
-                for i in iter {
-                    dest.write_str(::style_traits::${separator}::separator())?;
-                    i.to_css(dest)?;
-                }
-                Ok(())
-            }
-        }
+        % if separator == "Comma":
+        #[css(comma)]
+        % endif
+        #[derive(Clone, Debug, MallocSizeOf, PartialEq, ToCss)]
+        pub struct SpecifiedValue(
+            % if not allow_empty:
+            #[css(iterable)]
+            % else:
+            #[css(if_empty = "none", iterable)]
+            % endif
+            pub Vec<single_value::SpecifiedValue>,
+        );
 
         pub fn get_initial_value() -> computed_value::T {
             % if allow_empty and allow_empty != "NotInitial":
@@ -687,7 +658,13 @@
         pub struct LonghandsToSerialize<'a> {
             % for sub_property in shorthand.sub_properties:
                 pub ${sub_property.ident}:
+                % if sub_property.may_be_disabled_in(shorthand, product):
+                    Option<
+                % endif
                     &'a longhands::${sub_property.ident}::SpecifiedValue,
+                % if sub_property.may_be_disabled_in(shorthand, product):
+                    >,
+                % endif
             % endfor
         }
 
@@ -695,7 +672,8 @@
             /// Tries to get a serializable set of longhands given a set of
             /// property declarations.
             pub fn from_iter<I>(iter: I) -> Result<Self, ()>
-                where I: Iterator<Item=&'a PropertyDeclaration>,
+            where
+                I: Iterator<Item=&'a PropertyDeclaration>,
             {
                 // Define all of the expected variables that correspond to the shorthand
                 % for sub_property in shorthand.sub_properties:
@@ -723,12 +701,16 @@
 
                     (
                     % for sub_property in shorthand.sub_properties:
+                        % if sub_property.may_be_disabled_in(shorthand, product):
+                        ${sub_property.ident},
+                        % else:
                         Some(${sub_property.ident}),
+                        % endif
                     % endfor
                     ) =>
                     Ok(LonghandsToSerialize {
                         % for sub_property in shorthand.sub_properties:
-                            ${sub_property.ident}: ${sub_property.ident},
+                            ${sub_property.ident},
                         % endfor
                     }),
                     _ => Err(())
@@ -738,14 +720,24 @@
 
         /// Parse the given shorthand and fill the result into the
         /// `declarations` vector.
-        pub fn parse_into<'i, 't>(declarations: &mut SourcePropertyDeclaration,
-                                  context: &ParserContext, input: &mut Parser<'i, 't>)
-                                  -> Result<(), ParseError<'i>> {
+        pub fn parse_into<'i, 't>(
+            declarations: &mut SourcePropertyDeclaration,
+            context: &ParserContext,
+            input: &mut Parser<'i, 't>,
+        ) -> Result<(), ParseError<'i>> {
+            #[allow(unused_imports)]
+            use properties::{NonCustomPropertyId, LonghandId};
             input.parse_entirely(|input| parse_value(context, input)).map(|longhands| {
                 % for sub_property in shorthand.sub_properties:
+                % if sub_property.may_be_disabled_in(shorthand, product):
+                if NonCustomPropertyId::from(LonghandId::${sub_property.camel_case}).allowed_in(context) {
+                % endif
                     declarations.push(PropertyDeclaration::${sub_property.camel_case}(
                         longhands.${sub_property.ident}
                     ));
+                % if sub_property.may_be_disabled_in(shorthand, product):
+                }
+                % endif
                 % endfor
             })
         }

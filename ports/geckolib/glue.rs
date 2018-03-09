@@ -90,7 +90,7 @@ use style::gecko_bindings::structs;
 use style::gecko_bindings::structs::{CallerType, CSSPseudoElementType, CompositeOperation};
 use style::gecko_bindings::structs::{Loader, LoaderReusableStyleSheets};
 use style::gecko_bindings::structs::{RawServoStyleRule, ServoStyleContextStrong, RustString};
-use style::gecko_bindings::structs::{ServoStyleSheet, SheetParsingMode, nsAtom, nsCSSPropertyID};
+use style::gecko_bindings::structs::{ServoStyleSheet, SheetLoadData, SheetParsingMode, nsAtom, nsCSSPropertyID};
 use style::gecko_bindings::structs::{nsCSSFontDesc, nsCSSFontFaceRule, nsCSSCounterStyleRule};
 use style::gecko_bindings::structs::{nsRestyleHint, nsChangeHint, PropertyValuePair};
 use style::gecko_bindings::structs::AtomArray;
@@ -927,7 +927,7 @@ pub extern "C" fn Servo_ComputedValues_ExtractAnimationValue(
         Err(()) => return Strong::null(),
     };
 
-    match AnimationValue::from_computed_values(&property, &computed_values) {
+    match AnimationValue::from_computed_values(property, &computed_values) {
         Some(v) => Arc::new(v).into_strong(),
         None => Strong::null(),
     }
@@ -1067,10 +1067,14 @@ pub extern "C" fn Servo_StyleSheet_Empty(mode: SheetParsingMode) -> RawServoStyl
     ).into_strong()
 }
 
+/// Note: The load_data corresponds to this sheet, and is passed as the parent
+/// load data for child sheet loads. It may be null for certain cases where we
+/// know we won't have child loads.
 #[no_mangle]
 pub extern "C" fn Servo_StyleSheet_FromUTF8Bytes(
     loader: *mut Loader,
     stylesheet: *mut ServoStyleSheet,
+    load_data: *mut SheetLoadData,
     data: *const u8,
     data_len: usize,
     mode: SheetParsingMode,
@@ -1094,7 +1098,7 @@ pub extern "C" fn Servo_StyleSheet_FromUTF8Bytes(
     let loader = if loader.is_null() {
         None
     } else {
-        Some(StylesheetLoader::new(loader, stylesheet, reusable_sheets))
+        Some(StylesheetLoader::new(loader, stylesheet, load_data, reusable_sheets))
     };
 
     // FIXME(emilio): loader.as_ref() doesn't typecheck for some reason?
@@ -1538,7 +1542,7 @@ pub extern "C" fn Servo_CssRules_InsertRule(
     let loader = if loader.is_null() {
         None
     } else {
-        Some(StylesheetLoader::new(loader, gecko_stylesheet, ptr::null_mut()))
+        Some(StylesheetLoader::new(loader, gecko_stylesheet, ptr::null_mut(), ptr::null_mut()))
     };
     let loader = loader.as_ref().map(|loader| loader as &StyleStylesheetLoader);
     let rule = unsafe { rule.as_ref().unwrap().as_str_unchecked() };
@@ -3540,7 +3544,7 @@ pub extern "C" fn Servo_DeclarationBlock_SetBackgroundImage(
     use style::properties::longhands::background_image::SpecifiedValue as BackgroundImage;
     use style::values::Either;
     use style::values::generics::image::Image;
-    use style::values::specified::url::SpecifiedUrl;
+    use style::values::specified::url::SpecifiedImageUrl;
 
     let url_data = unsafe { RefPtr::from_ptr_ref(&raw_extra_data) };
     let string = unsafe { (*value).to_string() };
@@ -3551,8 +3555,7 @@ pub extern "C" fn Servo_DeclarationBlock_SetBackgroundImage(
         ParsingMode::DEFAULT,
         QuirksMode::NoQuirks,
     );
-    if let Ok(mut url) = SpecifiedUrl::parse_from_string(string.into(), &context) {
-        url.build_image_value();
+    if let Ok(url) = SpecifiedImageUrl::parse_from_string(string.into(), &context) {
         let decl = PropertyDeclaration::BackgroundImage(BackgroundImage(
             vec![Either::Second(Image::Url(url))]
         ));
@@ -4853,7 +4856,7 @@ pub extern "C" fn Servo_ParseFontDescriptor(
     use style::font_face::{FontDisplay, FontWeight, Source};
     use style::properties::longhands::font_language_override;
     use style::values::computed::font::FamilyName;
-    use style::values::specified::font::{SpecifiedFontFeatureSettings, FontVariationSettings};
+    use style::values::specified::font::{SpecifiedFontFeatureSettings, SpecifiedFontVariationSettings};
 
     let string = unsafe { (*value).to_string() };
     let mut input = ParserInput::new(&string);
@@ -4903,7 +4906,7 @@ pub extern "C" fn Servo_ParseFontDescriptor(
             eCSSFontDesc_Src / Vec<Source>,
             eCSSFontDesc_UnicodeRange / Vec<UnicodeRange>,
             eCSSFontDesc_FontFeatureSettings / SpecifiedFontFeatureSettings,
-            eCSSFontDesc_FontVariationSettings / FontVariationSettings,
+            eCSSFontDesc_FontVariationSettings / SpecifiedFontVariationSettings,
             eCSSFontDesc_FontLanguageOverride / font_language_override::SpecifiedValue,
             eCSSFontDesc_Display / FontDisplay,
         ]

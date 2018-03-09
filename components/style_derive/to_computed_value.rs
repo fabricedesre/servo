@@ -13,15 +13,41 @@ pub fn derive(input: DeriveInput) -> Tokens {
     let (impl_generics, ty_generics, mut where_clause, computed_value_type) =
         cg::fmap_trait_parts(&input, &trait_path, Ident::from("ComputedValue"));
 
+    if input.generics.params.is_empty() {
+        return quote! {
+            impl #impl_generics ::values::computed::ToComputedValue for #name #ty_generics
+            #where_clause
+            {
+                type ComputedValue = #computed_value_type;
+
+                #[inline]
+                fn to_computed_value(
+                    &self,
+                    _context: &::values::computed::Context,
+                ) -> Self::ComputedValue {
+                    ::std::clone::Clone::clone(self)
+                }
+
+                #[inline]
+                fn from_computed_value(computed: &Self::ComputedValue) -> Self {
+                    ::std::clone::Clone::clone(computed)
+                }
+            }
+        }
+    }
+
     let to_body = cg::fmap_match(&input, BindStyle::Ref, |binding| {
         let attrs = cg::parse_field_attrs::<ComputedValueAttrs>(&binding.ast());
         if attrs.clone {
             if cg::is_parameterized(&binding.ast().ty, &where_clause.params, None) {
-                where_clause.add_predicate(cg::where_predicate(
-                    binding.ast().ty.clone(),
-                    &parse_quote!(std::clone::Clone),
-                    None,
-                ));
+                cg::add_predicate(
+                    &mut where_clause.inner,
+                    cg::where_predicate(
+                        binding.ast().ty.clone(),
+                        &parse_quote!(std::clone::Clone),
+                        None,
+                    ),
+                );
             }
             quote! { ::std::clone::Clone::clone(#binding) }
         } else {

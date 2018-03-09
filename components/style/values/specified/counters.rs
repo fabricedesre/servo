@@ -18,7 +18,7 @@ use values::generics::counters::CounterReset as GenericCounterReset;
 use values::specified::Attr;
 use values::specified::Integer;
 #[cfg(feature = "gecko")]
-use values::specified::url::SpecifiedUrl;
+use values::specified::url::SpecifiedImageUrl;
 
 /// A specified value for the `counter-increment` property.
 pub type CounterIncrement = GenericCounterIncrement<Integer>;
@@ -92,19 +92,20 @@ pub enum Content {
     #[cfg(feature = "gecko")]
     MozAltContent,
     /// Content items.
-    #[css(iterable)]
-    Items(Box<[ContentItem]>),
+    Items(#[css(iterable)] Box<[ContentItem]>),
 }
 
 /// Items for the `content` property.
-#[derive(Clone, Debug, Eq, MallocSizeOf, PartialEq, ToComputedValue)]
+#[derive(Clone, Debug, Eq, MallocSizeOf, PartialEq, ToComputedValue, ToCss)]
 pub enum ContentItem {
     /// Literal string content.
     String(Box<str>),
     /// `counter(name, style)`.
-    Counter(Box<str>, CounterStyleType),
+    #[css(comma, function)]
+    Counter(CustomIdent, CounterStyleType),
     /// `counters(name, separator, style)`.
-    Counters(Box<str>, Box<str>, CounterStyleType),
+    #[css(comma, function)]
+    Counters(CustomIdent, Box<str>, CounterStyleType),
     /// `open-quote`.
     OpenQuote,
     /// `close-quote`.
@@ -118,5 +119,5 @@ pub enum ContentItem {
     Attr(Attr),
     /// `url(url)`
     #[cfg(feature = "gecko")]
-    Url(SpecifiedUrl),
+    Url(SpecifiedImageUrl),
 }

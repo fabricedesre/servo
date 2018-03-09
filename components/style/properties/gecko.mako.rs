@@ -696,7 +696,7 @@ def set_gecko_property(ffi_name, expr):
             }
             SVGPaintKind::PaintServer(url) => {
                 unsafe {
-                    bindings::Gecko_nsStyleSVGPaint_SetURLValue(paint, url.for_ffi());
+                    bindings::Gecko_nsStyleSVGPaint_SetURLValue(paint, url.url_value.get());
                 }
             }
             SVGPaintKind::Color(color) => {
@@ -936,18 +936,9 @@ def set_gecko_property(ffi_name, expr):
 <%def name="impl_css_url(ident, gecko_ffi_name)">
     #[allow(non_snake_case)]
     pub fn set_${ident}(&mut self, v: longhands::${ident}::computed_value::T) {
-        use gecko_bindings::sugar::refptr::RefPtr;
         match v {
             Either::First(url) => {
-                let refptr = unsafe {
-                    let ptr = bindings::Gecko_NewURLValue(url.for_ffi());
-                    if ptr.is_null() {
-                        self.gecko.${gecko_ffi_name}.clear();
-                        return;
-                    }
-                    RefPtr::from_addrefed(ptr)
-                };
-                self.gecko.${gecko_ffi_name}.set_move(refptr)
+                self.gecko.${gecko_ffi_name}.set_move(url.url_value.clone())
             }
             Either::Second(_none) => {
                 unsafe {
@@ -3472,7 +3463,7 @@ fn static_assert() {
         use properties::PropertyId;
         use properties::longhands::will_change::computed_value::T;
 
-        fn will_change_bitfield_from_prop_flags(prop: &LonghandId) -> u8 {
+        fn will_change_bitfield_from_prop_flags(prop: LonghandId) -> u8 {
             use properties::PropertyFlags;
             use gecko_bindings::structs::NS_STYLE_WILL_CHANGE_ABSPOS_CB;
             use gecko_bindings::structs::NS_STYLE_WILL_CHANGE_FIXPOS_CB;
@@ -3526,7 +3517,7 @@ fn static_assert() {
                                 if let PropertyDeclarationId::Longhand(longhand)
                                     = longhand_or_custom {
                                     self.gecko.mWillChangeBitField |=
-                                        will_change_bitfield_from_prop_flags(&longhand);
+                                        will_change_bitfield_from_prop_flags(longhand);
                                 }
                             },
                         }
@@ -4072,8 +4063,7 @@ fn static_assert() {
             }
             longhands::list_style_image::computed_value::T(Either::First(ref url)) => {
                 unsafe {
-                    Gecko_SetListStyleImageImageValue(&mut self.gecko,
-                                                      url.image_value.clone().unwrap().get());
+                    Gecko_SetListStyleImageImageValue(&mut self.gecko, url.image_value.get());
                 }
                 // We don't need to record this struct as uncacheable, like when setting
                 // background-image to a url() value, since only properties in reset structs
@@ -4092,7 +4082,7 @@ fn static_assert() {
     }
 
     pub fn clone_list_style_image(&self) -> longhands::list_style_image::computed_value::T {
-        use values::specified::url::SpecifiedUrl;
+        use values::specified::url::SpecifiedImageUrl;
         use values::{Either, None_};
 
         longhands::list_style_image::computed_value::T(
@@ -4101,8 +4091,8 @@ fn static_assert() {
                 false => {
                     unsafe {
                         let ref gecko_image_request = *self.gecko.mListStyleImage.mRawPtr;
-                        Either::First(SpecifiedUrl::from_image_request(gecko_image_request)
-                                      .expect("mListStyleImage could not convert to SpecifiedUrl"))
+                        Either::First(SpecifiedImageUrl::from_image_request(gecko_image_request)
+                                      .expect("mListStyleImage could not convert to SpecifiedImageUrl"))
                     }
                 }
             }
@@ -4444,7 +4434,7 @@ fn static_assert() {
                 },
                 Url(ref url) => {
                     unsafe {
-                        bindings::Gecko_nsStyleFilter_SetURLValue(gecko_filter, url.for_ffi());
+                        bindings::Gecko_nsStyleFilter_SetURLValue(gecko_filter, url.url_value.get());
                     }
                 },
             }
@@ -4719,16 +4709,15 @@ fn static_assert() {
 
     pub fn set_text_emphasis_style(&mut self, v: longhands::text_emphasis_style::computed_value::T) {
         use properties::longhands::text_emphasis_style::computed_value::T;
-        use properties::longhands::text_emphasis_style::ShapeKeyword;
+        use properties::longhands::text_emphasis_style::{FillMode, ShapeKeyword};
 
         self.clear_text_emphasis_style_if_string();
         let (te, s) = match v {
             T::None => (structs::NS_STYLE_TEXT_EMPHASIS_STYLE_NONE, ""),
             T::Keyword(ref keyword) => {
-                let fill = if keyword.fill {
-                    structs::NS_STYLE_TEXT_EMPHASIS_STYLE_FILLED
-                } else {
-                    structs::NS_STYLE_TEXT_EMPHASIS_STYLE_OPEN
+                let fill = match keyword.fill {
+                    FillMode::Filled => structs::NS_STYLE_TEXT_EMPHASIS_STYLE_FILLED,
+                    FillMode::Open => structs::NS_STYLE_TEXT_EMPHASIS_STYLE_OPEN,
                 };
                 let shape = match keyword.shape {
                     ShapeKeyword::Dot => structs::NS_STYLE_TEXT_EMPHASIS_STYLE_DOT,
@@ -4763,15 +4752,21 @@ fn static_assert() {
 
     pub fn clone_text_emphasis_style(&self) -> longhands::text_emphasis_style::computed_value::T {
         use properties::longhands::text_emphasis_style::computed_value::{T, KeywordValue};
-        use properties::longhands::text_emphasis_style::ShapeKeyword;
+        use properties::longhands::text_emphasis_style::{FillMode, ShapeKeyword};
 
         if self.gecko.mTextEmphasisStyle == structs::NS_STYLE_TEXT_EMPHASIS_STYLE_NONE as u8 {
             return T::None;
-        } else if self.gecko.mTextEmphasisStyle == structs::NS_STYLE_TEXT_EMPHASIS_STYLE_STRING as u8 {
+        }
+
+        if self.gecko.mTextEmphasisStyle == structs::NS_STYLE_TEXT_EMPHASIS_STYLE_STRING as u8 {
             return T::String(self.gecko.mTextEmphasisStyleString.to_string());
         }
 
-        let fill = self.gecko.mTextEmphasisStyle & structs::NS_STYLE_TEXT_EMPHASIS_STYLE_OPEN as u8 == 0;
+        let fill =
+            self.gecko.mTextEmphasisStyle & structs::NS_STYLE_TEXT_EMPHASIS_STYLE_OPEN as u8 == 0;
+
+        let fill = if fill { FillMode::Filled } else { FillMode::Open };
+
         let shape =
             match self.gecko.mTextEmphasisStyle as u32 & !structs::NS_STYLE_TEXT_EMPHASIS_STYLE_OPEN {
                 structs::NS_STYLE_TEXT_EMPHASIS_STYLE_DOT => ShapeKeyword::Dot,
@@ -4782,10 +4777,7 @@ fn static_assert() {
                 _ => panic!("Unexpected value in style struct for text-emphasis-style property")
             };
 
-        T::Keyword(KeywordValue {
-            fill: fill,
-            shape: shape
-        })
+        T::Keyword(KeywordValue { fill, shape })
     }
 
     ${impl_non_negative_length('_webkit_text_stroke_width',
@@ -4968,7 +4960,7 @@ fn static_assert() {
             % if ident == "clip_path":
             ShapeSource::ImageOrUrl(ref url) => {
                 unsafe {
-                    bindings::Gecko_StyleShapeSource_SetURLValue(${ident}, url.for_ffi())
+                    bindings::Gecko_StyleShapeSource_SetURLValue(${ident}, url.url_value.get())
                 }
             }
             % elif ident == "shape_outside":
@@ -5288,8 +5280,10 @@ clip-path
         }
         for i in 0..v.images.len() {
             unsafe {
-                Gecko_SetCursorImageValue(&mut self.gecko.mCursorImages[i],
-                                          v.images[i].url.clone().image_value.unwrap().get());
+                Gecko_SetCursorImageValue(
+                    &mut self.gecko.mCursorImages[i],
+                    v.images[i].url.image_value.get(),
+                );
             }
 
             // We don't need to record this struct as uncacheable, like when setting
@@ -5324,7 +5318,7 @@ clip-path
     pub fn clone_cursor(&self) -> longhands::cursor::computed_value::T {
         use values::computed::pointing::CursorImage;
         use style_traits::cursor::CursorKind;
-        use values::specified::url::SpecifiedUrl;
+        use values::specified::url::SpecifiedImageUrl;
 
         let keyword = match self.gecko.mCursor as u32 {
             structs::NS_STYLE_CURSOR_AUTO => CursorKind::Auto,
@@ -5369,8 +5363,8 @@ clip-path
         let images = self.gecko.mCursorImages.iter().map(|gecko_cursor_image| {
             let url = unsafe {
                 let gecko_image_request = gecko_cursor_image.mImage.mRawPtr.as_ref().unwrap();
-                SpecifiedUrl::from_image_request(&gecko_image_request)
-                    .expect("mCursorImages.mImage could not convert to SpecifiedUrl")
+                SpecifiedImageUrl::from_image_request(&gecko_image_request)
+                    .expect("mCursorImages.mImage could not convert to SpecifiedImageUrl")
             };
 
             let hotspot =
@@ -5428,6 +5422,7 @@ clip-path
     }
 
     pub fn set_content(&mut self, v: longhands::content::computed_value::T, device: &Device) {
+        use values::CustomIdent;
         use values::computed::counters::{Content, ContentItem};
         use values::generics::CounterStyleOrNone;
         use gecko_bindings::structs::nsStyleContentData;
@@ -5445,16 +5440,20 @@ clip-path
             ptr
         }
 
-        fn set_counter_function(data: &mut nsStyleContentData,
-                                content_type: nsStyleContentType,
-                                name: &str, sep: &str,
-                                style: CounterStyleOrNone, device: &Device) {
+        fn set_counter_function(
+            data: &mut nsStyleContentData,
+            content_type: nsStyleContentType,
+            name: &CustomIdent,
+            sep: &str,
+            style: CounterStyleOrNone,
+            device: &Device,
+        ) {
             debug_assert!(content_type == eStyleContentType_Counter ||
                           content_type == eStyleContentType_Counters);
             let counter_func = unsafe {
                 bindings::Gecko_SetCounterFunction(data, content_type).as_mut().unwrap()
             };
-            counter_func.mIdent.assign_utf8(name);
+            counter_func.mIdent.assign(name.0.as_slice());
             if content_type == eStyleContentType_Counters {
                 counter_func.mSeparator.assign_utf8(sep);
             }
@@ -5522,17 +5521,31 @@ clip-path
                         ContentItem::NoCloseQuote
                             => self.gecko.mContents[i].mType = eStyleContentType_NoCloseQuote,
                         ContentItem::Counter(ref name, ref style) => {
-                            set_counter_function(&mut self.gecko.mContents[i],
-                                                 eStyleContentType_Counter, &name, "", style.clone(), device);
+                            set_counter_function(
+                                &mut self.gecko.mContents[i],
+                                eStyleContentType_Counter,
+                                &name,
+                                "",
+                                style.clone(),
+                                device,
+                            );
                         }
                         ContentItem::Counters(ref name, ref sep, ref style) => {
-                            set_counter_function(&mut self.gecko.mContents[i],
-                                                 eStyleContentType_Counters, &name, &sep, style.clone(), device);
+                            set_counter_function(
+                                &mut self.gecko.mContents[i],
+                                eStyleContentType_Counters,
+                                &name,
+                                &sep,
+                                style.clone(),
+                                device,
+                            );
                         }
                         ContentItem::Url(ref url) => {
                             unsafe {
-                                bindings::Gecko_SetContentDataImageValue(&mut self.gecko.mContents[i],
-                                    url.image_value.clone().unwrap().get())
+                                bindings::Gecko_SetContentDataImageValue(
+                                    &mut self.gecko.mContents[i],
+                                    url.image_value.get(),
+                                )
                             }
                         }
                     }
@@ -5553,12 +5566,13 @@ clip-path
     }
 
     pub fn clone_content(&self) -> longhands::content::computed_value::T {
+        use Atom;
         use gecko::conversions::string_from_chars_pointer;
         use gecko_bindings::structs::nsStyleContentType::*;
         use values::computed::counters::{Content, ContentItem};
-        use values::Either;
+        use values::{CustomIdent, Either};
         use values::generics::CounterStyleOrNone;
-        use values::specified::url::SpecifiedUrl;
+        use values::specified::url::SpecifiedImageUrl;
         use values::specified::Attr;
 
         if self.gecko.mContents.is_empty() {
@@ -5601,7 +5615,7 @@ clip-path
                     eStyleContentType_Counter | eStyleContentType_Counters => {
                         let gecko_function =
                             unsafe { &**gecko_content.mContent.mCounters.as_ref() };
-                        let ident = gecko_function.mIdent.to_string();
+                        let ident = CustomIdent(Atom::from(&*gecko_function.mIdent));
                         let style =
                             CounterStyleOrNone::from_gecko_value(&gecko_function.mCounterStyle);
                         let style = match style {
@@ -5610,10 +5624,10 @@ clip-path
                                 unreachable!("counter function shouldn't have single string type"),
                         };
                         if gecko_content.mType == eStyleContentType_Counter {
-                            ContentItem::Counter(ident.into_boxed_str(), style)
+                            ContentItem::Counter(ident, style)
                         } else {
                             let separator = gecko_function.mSeparator.to_string();
-                            ContentItem::Counters(ident.into_boxed_str(), separator.into_boxed_str(), style)
+                            ContentItem::Counters(ident, separator.into_boxed_str(), style)
                         }
                     },
                     eStyleContentType_Image => {
@@ -5621,8 +5635,8 @@ clip-path
                             let gecko_image_request =
                                 &**gecko_content.mContent.mImage.as_ref();
                             ContentItem::Url(
-                                SpecifiedUrl::from_image_request(gecko_image_request)
-                                    .expect("mContent could not convert to SpecifiedUrl")
+                                SpecifiedImageUrl::from_image_request(gecko_image_request)
+                                    .expect("mContent could not convert to SpecifiedImageUrl")
                             )
                         }
                     },
