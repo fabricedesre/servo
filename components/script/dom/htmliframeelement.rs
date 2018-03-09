@@ -240,8 +240,42 @@ impl HTMLIFrameElement {
         let window = window_from_node(self);
         let pipeline_id = Some(window.upcast::<GlobalScope>().pipeline_id());
         let load_data = LoadData::new(url, pipeline_id, document.get_referrer_policy(), Some(document.url().clone()));
-        let browsing_context_id = BrowsingContextId::new();
-        let top_level_browsing_context_id = window.window_proxy().top_level_browsing_context_id();
+        
+        // PlumeOS: turn this iframe into a top level browsing context if the
+        // 'webview' attribute is present.
+        // TODO: don't hardcode the whitelisted origin.
+        use dom::bindings::codegen::Bindings::NodeBinding::NodeBinding::NodeMethods;
+        use dom::bindings::root::RootedReference;
+        let is_auth_webview = match self.upcast::<Node>().GetParentNode() {
+            None => false,
+            Some(parent) => {
+                // check page load origin.
+                let location = window_from_node(parent.r()).Location();
+                let origin = location.origin();
+
+                let whitelisted = ServoUrl::parse("http://localhost:8000").unwrap().origin();
+                // println!("Loading iframe from {:?} {}", origin, whitelisted.same_origin(origin));
+                whitelisted.same_origin(origin)
+            }
+        } && self.upcast::<Element>().has_attribute(&LocalName::from("webview"));
+
+        // println!("** Authorized webview: {}", is_auth_webview);
+
+        let (browsing_context_id, top_level_browsing_context_id) =
+            if is_auth_webview {
+            let top_level_browsing_context_id = TopLevelBrowsingContextId::new();
+            let browsing_context_id: BrowsingContextId = top_level_browsing_context_id.into();
+
+            // Add a webviewid attribute with the pipeline id for this frame.
+            self.upcast::<Element>().set_attribute(&LocalName::from("webviewid"),
+                AttrValue::String(format!("{}-{}", browsing_context_id.namespace_id.0, browsing_context_id.index.0.get())));
+
+            println!("** Webview top_level_browsing_context_id is {:?}", top_level_browsing_context_id);
+            (browsing_context_id, top_level_browsing_context_id)
+        } else {
+            (BrowsingContextId::new(), window.window_proxy().top_level_browsing_context_id())
+        };
+
         self.pipeline_id.set(None);
         self.pending_pipeline_id.set(None);
         self.top_level_browsing_context_id.set(Some(top_level_browsing_context_id));

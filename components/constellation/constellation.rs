@@ -1258,6 +1258,7 @@ impl<Message, LTF, STF> Constellation<Message, LTF, STF>
 
             FromScriptMsg::SetTitle(title) => {
                 if source_is_top_level_pipeline {
+                    println!("Sending ChangePageTitle {:?} {:?} to the embedder", source_top_ctx_id, title);
                     self.embedder_proxy.send(EmbedderMsg::ChangePageTitle(source_top_ctx_id, title))
                 }
             }
