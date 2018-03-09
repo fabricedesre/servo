@@ -56,6 +56,6 @@ pub fn default_config_dir() -> PathBuf {
 }
 
 #[cfg(feature = "gonk")]
-pub fn default_config_dir() -> Option<PathBuf> {
-    Some("/data/local/servo".into())
+pub fn default_config_dir() -> PathBuf {
+    "/data/local/servo".into()
 }
