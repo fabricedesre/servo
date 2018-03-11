@@ -233,8 +233,8 @@ name = "blurz"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "dbus 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-serialize 0.3.24 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dbus 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "dbus"
-version = "0.5.4"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3753,7 +3753,7 @@ dependencies = [
 "checksum darling_core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "167dd3e235c2f1da16a635c282630452cdf49191eb05711de1bcd1d3d5068c00"
 "checksum darling_macro 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c53edaba455f6073a10c27c72440860eb3f60444f8c8660a391032eeae744d82"
 "checksum dbghelp-sys 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "97590ba53bcb8ac28279161ca943a924d1fd4a8fb3fa63302591647c4fc5b850"
-"checksum dbus 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)" = "acd824d45fad5ff0e178fcb3c040f13780e73f63a0a6d5cde59e7894f251ab0e"
+"checksum dbus 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)" = "5b2c58aab20dd6637871e6e03cb6122f00b496a91eb65b688639c940012d8710"
 "checksum debug_unreachable 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "9a032eac705ca39214d169f83e3d3da290af06d8d1d344d1baad2fd002dca4b3"
 "checksum deflate 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)" = "ebb02aaf4b775afc96684b8402510a338086974e38570a1f65bea8c202eb77a7"
 "checksum device 0.0.1 (git+https://github.com/servo/devices)" = "<none>"
