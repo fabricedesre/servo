@@ -84,6 +84,7 @@ use constellation::{FromCompositorLogger, FromScriptLogger};
 #[cfg(all(not(target_os = "windows"), not(target_os = "ios")))]
 use constellation::content_process_sandbox_profile;
 use env_logger::Logger as EnvLogger;
+use euclid::Length;
 #[cfg(all(not(target_os = "windows"), not(target_os = "ios")))]
 use gaol::sandbox::{ChildSandbox, ChildSandboxMethods};
 use gfx::font_cache_thread::FontCacheThread;
@@ -139,7 +140,7 @@ where
         let opts = opts::get();
 
         // Make sure the gl context is made current.
-        window.prepare_for_composite(0, 0);
+        window.prepare_for_composite(Length::new(0), Length::new(0));
 
         // Get both endpoints of a special channel for communication between
         // the client window and the compositor. This channel is unique because
@@ -347,6 +348,10 @@ where
 
             WindowEvent::ToggleWebRenderDebug(option) => {
                 self.compositor.toggle_webrender_debug(option);
+            }
+
+            WindowEvent::CaptureWebRender => {
+                self.compositor.capture_webrender();
             }
 
             WindowEvent::NewBrowser(url, response_chan) => {
