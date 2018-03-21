@@ -911,6 +911,7 @@ lazy_static! {
 }
 
 pub fn set_defaults(opts: Opts) {
+    println!("Start Setting opts, multiprocess current={} new={}", multiprocess(), opts.multiprocess);
     // Set the static to the new default value.
     MULTIPROCESS.store(opts.multiprocess, Ordering::SeqCst);
 
@@ -920,6 +921,8 @@ pub fn set_defaults(opts: Opts) {
         let box_opts = Box::new(opts);
         DEFAULT_OPTIONS = Box::into_raw(box_opts);
     }
+
+    println!("End Setting opts, multiprocess current={}", multiprocess());
 }
 
 pub fn parse_pref_from_command_line(pref: &str) {
