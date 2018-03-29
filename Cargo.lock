@@ -2827,7 +2827,6 @@ dependencies = [
 name = "servo_config"
 version = "0.0.1"
 dependencies = [
- "android_injected_glue 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "euclid 0.17.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "getopts 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)",
