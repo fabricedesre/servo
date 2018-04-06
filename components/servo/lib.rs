@@ -426,13 +426,15 @@ where
 
     pub fn setup_logging(&self) {
         let constellation_chan = self.constellation_chan.clone();
-        let env_logger = EnvLoggerBuilder::new().build();
+        let env = env_logger::Env::default();
+        let env_logger = EnvLoggerBuilder::from_env(env).build();
         let con_logger = FromCompositorLogger::new(constellation_chan);
-        let filter = max(env_logger.filter(), con_logger.filter());
-        log::set_max_level(filter);
 
+        let filter = max(env_logger.filter(), con_logger.filter());
         let logger = BothLogger(env_logger, con_logger);
+
         log::set_boxed_logger(Box::new(logger)).expect("Failed to set logger.");
+        log::set_max_level(filter);
     }
 
     pub fn deinit(self) {
@@ -466,21 +468,20 @@ fn create_compositor_channel(
     )
 }
 
-fn create_constellation(
-    user_agent: Cow<'static, str>,
-    config_dir: Option<PathBuf>,
-    embedder_proxy: EmbedderProxy,
-    compositor_proxy: CompositorProxy,
-    time_profiler_chan: time::ProfilerChan,
-    mem_profiler_chan: mem::ProfilerChan,
-    debugger_chan: Option<debugger::Sender>,
-    devtools_chan: Option<Sender<devtools_traits::DevtoolsControlMsg>>,
-    supports_clipboard: bool,
-    webrender: &mut webrender::Renderer,
-    webrender_document: webrender_api::DocumentId,
-    webrender_api_sender: webrender_api::RenderApiSender,
-    window_gl: Rc<gl::Gl>,
-) -> (Sender<ConstellationMsg>, SWManagerSenders) {
+fn create_constellation(user_agent: Cow<'static, str>,
+                        config_dir: Option<PathBuf>,
+                        embedder_proxy: EmbedderProxy,
+                        compositor_proxy: CompositorProxy,
+                        time_profiler_chan: time::ProfilerChan,
+                        mem_profiler_chan: mem::ProfilerChan,
+                        debugger_chan: Option<debugger::Sender>,
+                        devtools_chan: Option<Sender<devtools_traits::DevtoolsControlMsg>>,
+                        supports_clipboard: bool,
+                        webrender: &mut webrender::Renderer,
+                        webrender_document: webrender_api::DocumentId,
+                        webrender_api_sender: webrender_api::RenderApiSender,
+                        window_gl: Rc<gl::Gl>)
+                        -> (Sender<ConstellationMsg>, SWManagerSenders) {
     let bluetooth_thread: IpcSender<BluetoothRequest>;
 
     #[cfg(feature = "web-bluetooth")]
@@ -494,16 +495,14 @@ fn create_constellation(
         bluetooth_thread = sender;
     }
 
-    let (public_resource_threads, private_resource_threads) = new_resource_threads(
-        user_agent,
-        devtools_chan.clone(),
-        time_profiler_chan.clone(),
-        config_dir,
-    );
-    let font_cache_thread = FontCacheThread::new(
-        public_resource_threads.sender(),
-        webrender_api_sender.create_api(),
-    );
+    let (public_resource_threads, private_resource_threads) =
+        new_resource_threads(user_agent,
+                             devtools_chan.clone(),
+                             time_profiler_chan.clone(),
+                             mem_profiler_chan.clone(),
+                             config_dir);
+    let font_cache_thread = FontCacheThread::new(public_resource_threads.sender(),
+                                                 webrender_api_sender.create_api());
 
     let resource_sender = public_resource_threads.sender();
 
@@ -609,13 +608,15 @@ impl<Log1, Log2> Log for BothLogger<Log1, Log2> where Log1: Log, Log2: Log {
 }
 
 pub fn set_logger(script_to_constellation_chan: ScriptToConstellationChan) {
-    let env_logger = EnvLoggerBuilder::new().build();
     let con_logger = FromScriptLogger::new(script_to_constellation_chan);
-    let filter = max(env_logger.filter(), con_logger.filter());
-    log::set_max_level(filter);
+    let env = env_logger::Env::default();
+    let env_logger = EnvLoggerBuilder::from_env(env).build();
 
+    let filter = max(env_logger.filter(), con_logger.filter());
     let logger = BothLogger(env_logger, con_logger);
+
     log::set_boxed_logger(Box::new(logger)).expect("Failed to set logger.");
+    log::set_max_level(filter);
 }
 
 /// Content process entry point.

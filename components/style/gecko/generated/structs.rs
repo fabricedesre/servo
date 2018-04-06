@@ -489,6 +489,7 @@ pub mod root {
     pub const NS_STYLE_WIDTH_MIN_CONTENT: u32 = 1;
     pub const NS_STYLE_WIDTH_FIT_CONTENT: u32 = 2;
     pub const NS_STYLE_WIDTH_AVAILABLE: u32 = 3;
+    pub const NS_STYLE_FLEX_BASIS_CONTENT: u32 = 4;
     pub const NS_STYLE_POSITION_STATIC: u32 = 0;
     pub const NS_STYLE_POSITION_RELATIVE: u32 = 1;
     pub const NS_STYLE_POSITION_ABSOLUTE: u32 = 2;
@@ -11973,79 +11974,79 @@ pub mod root {
         }
         #[repr(C)]
         #[derive(Debug, Copy)]
-        pub struct StylePrefs {
+        pub struct StaticPrefs {
             pub _address: u8,
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs19sFontDisplayEnabledE"]
-            pub static mut StylePrefs_sFontDisplayEnabled: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs41sVarCache_layout_css_font_display_enabledE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_font_display_enabled: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs19sOpentypeSVGEnabledE"]
-            pub static mut StylePrefs_sOpentypeSVGEnabled: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs49sVarCache_gfx_font_rendering_opentype_svg_enabledE"]
+            pub static mut StaticPrefs_sVarCache_gfx_font_rendering_opentype_svg_enabled: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs29sWebkitPrefixedAliasesEnabledE"]
-            pub static mut StylePrefs_sWebkitPrefixedAliasesEnabled: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs36sVarCache_layout_css_prefixes_webkitE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_prefixes_webkit: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs30sWebkitDevicePixelRatioEnabledE"]
-            pub static mut StylePrefs_sWebkitDevicePixelRatioEnabled: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs55sVarCache_layout_css_prefixes_device_pixel_ratio_webkitE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_prefixes_device_pixel_ratio_webkit: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs20sMozGradientsEnabledE"]
-            pub static mut StylePrefs_sMozGradientsEnabled: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs39sVarCache_layout_css_prefixes_gradientsE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_prefixes_gradients: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs22sControlCharVisibilityE"]
-            pub static mut StylePrefs_sControlCharVisibility: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs47sVarCache_layout_css_control_characters_visibleE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_control_characters_visible: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs28sFramesTimingFunctionEnabledE"]
-            pub static mut StylePrefs_sFramesTimingFunctionEnabled: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs42sVarCache_layout_css_frames_timing_enabledE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_frames_timing_enabled: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs31sUnprefixedFullscreenApiEnabledE"]
-            pub static mut StylePrefs_sUnprefixedFullscreenApiEnabled: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs42sVarCache_full_screen_api_unprefix_enabledE"]
+            pub static mut StaticPrefs_sVarCache_full_screen_api_unprefix_enabled: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs20sVisitedLinksEnabledE"]
-            pub static mut StylePrefs_sVisitedLinksEnabled: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs42sVarCache_layout_css_visited_links_enabledE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_visited_links_enabled: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs28sMozDocumentEnabledInContentE"]
-            pub static mut StylePrefs_sMozDocumentEnabledInContent: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs49sVarCache_layout_css_moz_document_content_enabledE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_moz_document_content_enabled: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs32sMozDocumentURLPrefixHackEnabledE"]
-            pub static mut StylePrefs_sMozDocumentURLPrefixHackEnabled: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs57sVarCache_layout_css_moz_document_url_prefix_hack_enabledE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_moz_document_url_prefix_hack_enabled: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs32sGridTemplateSubgridValueEnabledE"]
-            pub static mut StylePrefs_sGridTemplateSubgridValueEnabled: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs56sVarCache_layout_css_grid_template_subgrid_value_enabledE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_grid_template_subgrid_value_enabled: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs22sFontVariationsEnabledE"]
-            pub static mut StylePrefs_sFontVariationsEnabled: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs44sVarCache_layout_css_font_variations_enabledE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_font_variations_enabled: bool;
         }
         extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla10StylePrefs22sEmulateMozBoxWithFlexE"]
-            pub static mut StylePrefs_sEmulateMozBoxWithFlex: bool;
+            #[link_name = "\u{1}_ZN7mozilla11StaticPrefs46sVarCache_layout_css_emulate_moz_box_with_flexE"]
+            pub static mut StaticPrefs_sVarCache_layout_css_emulate_moz_box_with_flex: bool;
         }
         #[test]
-        fn bindgen_test_layout_StylePrefs() {
+        fn bindgen_test_layout_StaticPrefs() {
             assert_eq!(
-                ::std::mem::size_of::<StylePrefs>(),
+                ::std::mem::size_of::<StaticPrefs>(),
                 1usize,
-                concat!("Size of: ", stringify!(StylePrefs))
+                concat!("Size of: ", stringify!(StaticPrefs))
             );
             assert_eq!(
-                ::std::mem::align_of::<StylePrefs>(),
+                ::std::mem::align_of::<StaticPrefs>(),
                 1usize,
-                concat!("Alignment of ", stringify!(StylePrefs))
+                concat!("Alignment of ", stringify!(StaticPrefs))
             );
         }
-        impl Clone for StylePrefs {
+        impl Clone for StaticPrefs {
             fn clone(&self) -> Self {
                 *self
             }
@@ -13376,161 +13377,6 @@ pub mod root {
             fn clone(&self) -> Self {
                 *self
             }
-        }
-        #[repr(C)]
-        #[derive(Debug)]
-        pub struct CSSFontFaceDescriptors {
-            pub mFamily: root::nsCSSValue,
-            pub mStyle: root::nsCSSValue,
-            pub mWeight: root::nsCSSValue,
-            pub mStretch: root::nsCSSValue,
-            pub mSrc: root::nsCSSValue,
-            pub mUnicodeRange: root::nsCSSValue,
-            pub mFontFeatureSettings: root::nsCSSValue,
-            pub mFontVariationSettings: root::nsCSSValue,
-            pub mFontLanguageOverride: root::nsCSSValue,
-            pub mDisplay: root::nsCSSValue,
-        }
-        extern "C" {
-            #[link_name = "\u{1}_ZN7mozilla22CSSFontFaceDescriptors6FieldsE"]
-            pub static mut CSSFontFaceDescriptors_Fields: [*const root::nsCSSValue; 0usize];
-        }
-        #[test]
-        fn bindgen_test_layout_CSSFontFaceDescriptors() {
-            assert_eq!(
-                ::std::mem::size_of::<CSSFontFaceDescriptors>(),
-                160usize,
-                concat!("Size of: ", stringify!(CSSFontFaceDescriptors))
-            );
-            assert_eq!(
-                ::std::mem::align_of::<CSSFontFaceDescriptors>(),
-                8usize,
-                concat!("Alignment of ", stringify!(CSSFontFaceDescriptors))
-            );
-            assert_eq!(
-                unsafe {
-                    &(*(::std::ptr::null::<CSSFontFaceDescriptors>())).mFamily as *const _ as usize
-                },
-                0usize,
-                concat!(
-                    "Offset of field: ",
-                    stringify!(CSSFontFaceDescriptors),
-                    "::",
-                    stringify!(mFamily)
-                )
-            );
-            assert_eq!(
-                unsafe {
-                    &(*(::std::ptr::null::<CSSFontFaceDescriptors>())).mStyle as *const _ as usize
-                },
-                16usize,
-                concat!(
-                    "Offset of field: ",
-                    stringify!(CSSFontFaceDescriptors),
-                    "::",
-                    stringify!(mStyle)
-                )
-            );
-            assert_eq!(
-                unsafe {
-                    &(*(::std::ptr::null::<CSSFontFaceDescriptors>())).mWeight as *const _ as usize
-                },
-                32usize,
-                concat!(
-                    "Offset of field: ",
-                    stringify!(CSSFontFaceDescriptors),
-                    "::",
-                    stringify!(mWeight)
-                )
-            );
-            assert_eq!(
-                unsafe {
-                    &(*(::std::ptr::null::<CSSFontFaceDescriptors>())).mStretch as *const _ as usize
-                },
-                48usize,
-                concat!(
-                    "Offset of field: ",
-                    stringify!(CSSFontFaceDescriptors),
-                    "::",
-                    stringify!(mStretch)
-                )
-            );
-            assert_eq!(
-                unsafe {
-                    &(*(::std::ptr::null::<CSSFontFaceDescriptors>())).mSrc as *const _ as usize
-                },
-                64usize,
-                concat!(
-                    "Offset of field: ",
-                    stringify!(CSSFontFaceDescriptors),
-                    "::",
-                    stringify!(mSrc)
-                )
-            );
-            assert_eq!(
-                unsafe {
-                    &(*(::std::ptr::null::<CSSFontFaceDescriptors>())).mUnicodeRange as *const _
-                        as usize
-                },
-                80usize,
-                concat!(
-                    "Offset of field: ",
-                    stringify!(CSSFontFaceDescriptors),
-                    "::",
-                    stringify!(mUnicodeRange)
-                )
-            );
-            assert_eq!(
-                unsafe {
-                    &(*(::std::ptr::null::<CSSFontFaceDescriptors>())).mFontFeatureSettings
-                        as *const _ as usize
-                },
-                96usize,
-                concat!(
-                    "Offset of field: ",
-                    stringify!(CSSFontFaceDescriptors),
-                    "::",
-                    stringify!(mFontFeatureSettings)
-                )
-            );
-            assert_eq!(
-                unsafe {
-                    &(*(::std::ptr::null::<CSSFontFaceDescriptors>())).mFontVariationSettings
-                        as *const _ as usize
-                },
-                112usize,
-                concat!(
-                    "Offset of field: ",
-                    stringify!(CSSFontFaceDescriptors),
-                    "::",
-                    stringify!(mFontVariationSettings)
-                )
-            );
-            assert_eq!(
-                unsafe {
-                    &(*(::std::ptr::null::<CSSFontFaceDescriptors>())).mFontLanguageOverride
-                        as *const _ as usize
-                },
-                128usize,
-                concat!(
-                    "Offset of field: ",
-                    stringify!(CSSFontFaceDescriptors),
-                    "::",
-                    stringify!(mFontLanguageOverride)
-                )
-            );
-            assert_eq!(
-                unsafe {
-                    &(*(::std::ptr::null::<CSSFontFaceDescriptors>())).mDisplay as *const _ as usize
-                },
-                144usize,
-                concat!(
-                    "Offset of field: ",
-                    stringify!(CSSFontFaceDescriptors),
-                    "::",
-                    stringify!(mDisplay)
-                )
-            );
         }
         pub mod intl {
             #[allow(unused_imports)]
@@ -23543,6 +23389,16 @@ pub mod root {
             *self
         }
     }
+    #[repr(C)]
+    #[derive(Debug, Copy)]
+    pub struct RawServoFontFaceRule {
+        _unused: [u8; 0],
+    }
+    impl Clone for RawServoFontFaceRule {
+        fn clone(&self) -> Self {
+            *self
+        }
+    }
     pub mod nsStyleTransformMatrix {
         #[allow(unused_imports)]
         use self::super::super::root;
@@ -23625,6 +23481,49 @@ pub mod root {
     pub type RawGeckoServoStyleRuleListBorrowedMut = *mut root::RawGeckoServoStyleRuleList;
     pub type RawGeckoCSSPropertyIDListBorrowed = *const root::RawGeckoCSSPropertyIDList;
     pub type RawGeckoStyleChildrenIteratorBorrowedMut = *mut root::RawGeckoStyleChildrenIterator;
+    #[repr(C)]
+    #[derive(Debug)]
+    pub struct nsFontFaceRuleContainer {
+        pub mRule: root::RefPtr<root::RawServoFontFaceRule>,
+        pub mSheetType: root::mozilla::SheetType,
+    }
+    #[test]
+    fn bindgen_test_layout_nsFontFaceRuleContainer() {
+        assert_eq!(
+            ::std::mem::size_of::<nsFontFaceRuleContainer>(),
+            16usize,
+            concat!("Size of: ", stringify!(nsFontFaceRuleContainer))
+        );
+        assert_eq!(
+            ::std::mem::align_of::<nsFontFaceRuleContainer>(),
+            8usize,
+            concat!("Alignment of ", stringify!(nsFontFaceRuleContainer))
+        );
+        assert_eq!(
+            unsafe {
+                &(*(::std::ptr::null::<nsFontFaceRuleContainer>())).mRule as *const _ as usize
+            },
+            0usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(nsFontFaceRuleContainer),
+                "::",
+                stringify!(mRule)
+            )
+        );
+        assert_eq!(
+            unsafe {
+                &(*(::std::ptr::null::<nsFontFaceRuleContainer>())).mSheetType as *const _ as usize
+            },
+            8usize,
+            concat!(
+                "Offset of field: ",
+                stringify!(nsFontFaceRuleContainer),
+                "::",
+                stringify!(mSheetType)
+            )
+        );
+    }
     #[repr(C)]
     #[derive(Debug, Copy)]
     pub struct nsDOMStyleSheetSetList {
@@ -39872,140 +39771,6 @@ pub mod root {
         );
     }
     #[repr(C)]
-    #[derive(Debug)]
-    pub struct nsCSSFontFaceStyleDecl {
-        pub _base: root::nsICSSDeclaration,
-        pub mDescriptors: root::mozilla::CSSFontFaceDescriptors,
-    }
-    #[test]
-    fn bindgen_test_layout_nsCSSFontFaceStyleDecl() {
-        assert_eq!(
-            ::std::mem::size_of::<nsCSSFontFaceStyleDecl>(),
-            192usize,
-            concat!("Size of: ", stringify!(nsCSSFontFaceStyleDecl))
-        );
-        assert_eq!(
-            ::std::mem::align_of::<nsCSSFontFaceStyleDecl>(),
-            8usize,
-            concat!("Alignment of ", stringify!(nsCSSFontFaceStyleDecl))
-        );
-        assert_eq!(
-            unsafe {
-                &(*(::std::ptr::null::<nsCSSFontFaceStyleDecl>())).mDescriptors as *const _ as usize
-            },
-            32usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(nsCSSFontFaceStyleDecl),
-                "::",
-                stringify!(mDescriptors)
-            )
-        );
-    }
-    #[repr(C)]
-    #[derive(Debug)]
-    pub struct nsCSSFontFaceRule {
-        pub _base: root::mozilla::css::Rule,
-        pub mDecl: root::nsCSSFontFaceStyleDecl,
-    }
-    #[repr(C)]
-    #[derive(Debug, Copy)]
-    pub struct nsCSSFontFaceRule_cycleCollection {
-        pub _base: root::mozilla::css::Rule_cycleCollection,
-    }
-    #[test]
-    fn bindgen_test_layout_nsCSSFontFaceRule_cycleCollection() {
-        assert_eq!(
-            ::std::mem::size_of::<nsCSSFontFaceRule_cycleCollection>(),
-            16usize,
-            concat!("Size of: ", stringify!(nsCSSFontFaceRule_cycleCollection))
-        );
-        assert_eq!(
-            ::std::mem::align_of::<nsCSSFontFaceRule_cycleCollection>(),
-            8usize,
-            concat!(
-                "Alignment of ",
-                stringify!(nsCSSFontFaceRule_cycleCollection)
-            )
-        );
-    }
-    impl Clone for nsCSSFontFaceRule_cycleCollection {
-        fn clone(&self) -> Self {
-            *self
-        }
-    }
-    extern "C" {
-        #[link_name = "\u{1}_ZN17nsCSSFontFaceRule21_cycleCollectorGlobalE"]
-        pub static mut nsCSSFontFaceRule__cycleCollectorGlobal:
-            root::nsCSSFontFaceRule_cycleCollection;
-    }
-    #[test]
-    fn bindgen_test_layout_nsCSSFontFaceRule() {
-        assert_eq!(
-            ::std::mem::size_of::<nsCSSFontFaceRule>(),
-            256usize,
-            concat!("Size of: ", stringify!(nsCSSFontFaceRule))
-        );
-        assert_eq!(
-            ::std::mem::align_of::<nsCSSFontFaceRule>(),
-            8usize,
-            concat!("Alignment of ", stringify!(nsCSSFontFaceRule))
-        );
-        assert_eq!(
-            unsafe { &(*(::std::ptr::null::<nsCSSFontFaceRule>())).mDecl as *const _ as usize },
-            64usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(nsCSSFontFaceRule),
-                "::",
-                stringify!(mDecl)
-            )
-        );
-    }
-    #[repr(C)]
-    #[derive(Debug)]
-    pub struct nsFontFaceRuleContainer {
-        pub mRule: root::RefPtr<root::nsCSSFontFaceRule>,
-        pub mSheetType: root::mozilla::SheetType,
-    }
-    #[test]
-    fn bindgen_test_layout_nsFontFaceRuleContainer() {
-        assert_eq!(
-            ::std::mem::size_of::<nsFontFaceRuleContainer>(),
-            16usize,
-            concat!("Size of: ", stringify!(nsFontFaceRuleContainer))
-        );
-        assert_eq!(
-            ::std::mem::align_of::<nsFontFaceRuleContainer>(),
-            8usize,
-            concat!("Alignment of ", stringify!(nsFontFaceRuleContainer))
-        );
-        assert_eq!(
-            unsafe {
-                &(*(::std::ptr::null::<nsFontFaceRuleContainer>())).mRule as *const _ as usize
-            },
-            0usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(nsFontFaceRuleContainer),
-                "::",
-                stringify!(mRule)
-            )
-        );
-        assert_eq!(
-            unsafe {
-                &(*(::std::ptr::null::<nsFontFaceRuleContainer>())).mSheetType as *const _ as usize
-            },
-            8usize,
-            concat!(
-                "Offset of field: ",
-                stringify!(nsFontFaceRuleContainer),
-                "::",
-                stringify!(mSheetType)
-            )
-        );
-    }
-    #[repr(C)]
     #[derive(Debug, Copy)]
     pub struct nsHtml5StringParser {
         _unused: [u8; 0],
@@ -47146,6 +46911,25 @@ pub mod root {
         );
     }
     #[test]
+    fn __bindgen_test_layout_RefPtr_open0_RawServoFontFaceRule_close0_instantiation() {
+        assert_eq!(
+            ::std::mem::size_of::<root::RefPtr<root::RawServoFontFaceRule>>(),
+            8usize,
+            concat!(
+                "Size of template specialization: ",
+                stringify!(root::RefPtr<root::RawServoFontFaceRule>)
+            )
+        );
+        assert_eq!(
+            ::std::mem::align_of::<root::RefPtr<root::RawServoFontFaceRule>>(),
+            8usize,
+            concat!(
+                "Alignment of template specialization: ",
+                stringify!(root::RefPtr<root::RawServoFontFaceRule>)
+            )
+        );
+    }
+    #[test]
     fn __bindgen_test_layout_RefPtr_open0_RawServoAnimationValue_close0_instantiation_1() {
         assert_eq!(
             ::std::mem::size_of::<root::RefPtr<root::RawServoAnimationValue>>(),
@@ -49301,25 +49085,6 @@ pub mod root {
             concat!(
                 "Alignment of template specialization: ",
                 stringify!(root::RefPtr<root::nsAtom>)
-            )
-        );
-    }
-    #[test]
-    fn __bindgen_test_layout_RefPtr_open0_nsCSSFontFaceRule_close0_instantiation() {
-        assert_eq!(
-            ::std::mem::size_of::<root::RefPtr<root::nsCSSFontFaceRule>>(),
-            8usize,
-            concat!(
-                "Size of template specialization: ",
-                stringify!(root::RefPtr<root::nsCSSFontFaceRule>)
-            )
-        );
-        assert_eq!(
-            ::std::mem::align_of::<root::RefPtr<root::nsCSSFontFaceRule>>(),
-            8usize,
-            concat!(
-                "Alignment of template specialization: ",
-                stringify!(root::RefPtr<root::nsCSSFontFaceRule>)
             )
         );
     }
