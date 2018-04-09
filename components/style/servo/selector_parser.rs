@@ -312,11 +312,6 @@ impl ::selectors::parser::NonTSPseudoClass for NonTSPseudoClass {
     type Impl = SelectorImpl;
 
     #[inline]
-    fn is_host(&self) -> bool {
-        false
-    }
-
-    #[inline]
     fn is_active_or_hover(&self) -> bool {
         matches!(*self, NonTSPseudoClass::Active | NonTSPseudoClass::Hover)
     }
@@ -591,11 +586,11 @@ impl<'a, 'i> ::selectors::Parser<'i> for SelectorParser<'a> {
     }
 
     fn default_namespace(&self) -> Option<Namespace> {
-        self.namespaces.default.as_ref().map(|&(ref ns, _)| ns.clone())
+        self.namespaces.default.as_ref().map(|ns| ns.clone())
     }
 
     fn namespace_for_prefix(&self, prefix: &Prefix) -> Option<Namespace> {
-        self.namespaces.prefixes.get(prefix).map(|&(ref ns, _)| ns.clone())
+        self.namespaces.prefixes.get(prefix).cloned()
     }
 }
 

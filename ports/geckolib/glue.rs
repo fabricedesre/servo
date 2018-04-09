@@ -953,6 +953,25 @@ pub unsafe extern "C" fn Servo_Property_IsShorthand(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn Servo_Property_IsInherited(
+    prop_name: *const nsACString,
+) -> bool {
+    let prop_name = prop_name.as_ref().unwrap().as_str_unchecked();
+    let prop_id = match PropertyId::parse(prop_name) {
+        Ok(id) => id,
+        Err(_) => return false,
+    };
+    let longhand_id = match prop_id {
+        PropertyId::Custom(_) => return true,
+        PropertyId::Longhand(id) |
+        PropertyId::LonghandAlias(id, _) => id,
+        PropertyId::Shorthand(id) |
+        PropertyId::ShorthandAlias(id, _) => id.longhands().next().unwrap(),
+    };
+    longhand_id.inherited()
+}
+
+#[no_mangle]
 pub extern "C" fn Servo_Property_IsAnimatable(property: nsCSSPropertyID) -> bool {
     use style::properties::animated_properties;
     animated_properties::nscsspropertyid_is_animatable(property)
@@ -1043,15 +1062,32 @@ pub extern "C" fn Servo_Element_GetPseudoComputedValues(
 }
 
 #[no_mangle]
-pub extern "C" fn Servo_Element_IsDisplayNone(element: RawGeckoElementBorrowed) -> bool {
+pub extern "C" fn Servo_Element_IsDisplayNone(
+    element: RawGeckoElementBorrowed,
+) -> bool {
     let element = GeckoElement(element);
-    let data = element.get_data().expect("Invoking Servo_Element_IsDisplayNone on unstyled element");
+    let data = element.get_data()
+        .expect("Invoking Servo_Element_IsDisplayNone on unstyled element");
 
-    // This function is hot, so we bypass the AtomicRefCell. It would be nice to also assert that
-    // we're not in the servo traversal, but this function is called at various intermediate
-    // checkpoints when managing the traversal on the Gecko side.
+    // This function is hot, so we bypass the AtomicRefCell.
+    //
+    // It would be nice to also assert that we're not in the servo traversal,
+    // but this function is called at various intermediate checkpoints when
+    // managing the traversal on the Gecko side.
     debug_assert!(is_main_thread());
     unsafe { &*data.as_ptr() }.styles.is_display_none()
+}
+
+#[no_mangle]
+pub extern "C" fn Servo_Element_IsDisplayContents(
+    element: RawGeckoElementBorrowed,
+) -> bool {
+    let element = GeckoElement(element);
+    let data = element.get_data()
+        .expect("Invoking Servo_Element_IsDisplayContents on unstyled element");
+
+    debug_assert!(is_main_thread());
+    unsafe { &*data.as_ptr() }.styles.primary().get_box().clone_display().is_contents()
 }
 
 #[no_mangle]
@@ -4897,7 +4933,7 @@ pub extern "C" fn Servo_StyleSet_MightHaveAttributeDependency(
 
     unsafe {
         Atom::with(local_name, |atom| {
-            data.stylist.any_applicable_rule_data(element, |data, _| {
+            data.stylist.any_applicable_rule_data(element, |data| {
                 data.might_have_attribute_dependency(atom)
             })
         })
@@ -4915,7 +4951,7 @@ pub extern "C" fn Servo_StyleSet_HasStateDependency(
     let state = ElementState::from_bits_truncate(state);
     let data = PerDocumentStyleData::from_ffi(raw_data).borrow();
 
-    data.stylist.any_applicable_rule_data(element, |data, _| {
+    data.stylist.any_applicable_rule_data(element, |data| {
         data.has_state_dependency(state)
     })
 }
