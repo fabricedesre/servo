@@ -7,7 +7,6 @@ publish = false
 
 [lib]
 path = "lib.rs"
-name = "nonzero"
 
 [features]
 unstable = ["serde/unstable"]
