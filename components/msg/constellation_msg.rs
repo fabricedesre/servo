@@ -333,6 +333,12 @@ impl fmt::Display for TopLevelBrowsingContextId {
     }
 }
 
+impl From<BrowsingContextId> for TopLevelBrowsingContextId {
+    fn from(id: BrowsingContextId) -> TopLevelBrowsingContextId {
+        TopLevelBrowsingContextId(id)
+    }
+}
+
 impl From<TopLevelBrowsingContextId> for BrowsingContextId {
     fn from(id: TopLevelBrowsingContextId) -> BrowsingContextId {
         id.0
