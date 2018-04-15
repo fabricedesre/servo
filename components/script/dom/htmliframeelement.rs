@@ -249,7 +249,7 @@ impl HTMLIFrameElement {
         let pipeline_id = Some(window.upcast::<GlobalScope>().pipeline_id());
         let load_data = LoadData::new(url, pipeline_id, document.get_referrer_policy(), Some(document.url().clone()));
         
-        // PlumeOS: turn this iframe into a top level browsing context if the
+        // Servonk: turn this iframe into a top level browsing context if the
         // 'webview' attribute is present.
         // TODO: don't hardcode the whitelisted origin.
         use dom::bindings::codegen::Bindings::NodeBinding::NodeBinding::NodeMethods;

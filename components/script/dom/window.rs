@@ -1700,7 +1700,8 @@ impl Window {
 
     // https://html.spec.whatwg.org/multipage/#top-level-browsing-context
     pub fn is_top_level(&self) -> bool {
-        self.parent_info.is_none()
+        // FIXME: Servonk WebView Hack.
+        self.parent_info.is_none() || &format!("{}", self.parent_info.unwrap()) == "(0,1)"
     }
 
     pub fn evaluate_media_queries_and_report_changes(&self) {
