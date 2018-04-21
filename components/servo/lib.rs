@@ -486,7 +486,7 @@ fn create_constellation(user_agent: Cow<'static, str>,
 
     #[cfg(feature = "web-bluetooth")]
     {
-        bluetooth_thread = BluetoothThreadFactory::new();
+        bluetooth_thread = BluetoothThreadFactory::new(embedder_proxy.clone());
     }
 
     #[cfg(not(feature = "web-bluetooth"))]
