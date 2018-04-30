@@ -110,7 +110,7 @@ line syntax is:
 **On Windows**: You will need to preceed the prior command with
 `python` or the path to the python binary.
 ```bash
-python wpt product [tests]
+python wpt run product [tests]
 ```
 
 where `product` is currently `firefox` or `chrome` and `[tests]` is a
@@ -271,7 +271,7 @@ will be `C:\\OpenSSL-Win32\\bin\\openssl.cfg`).
 ### Trusting Root CA
 
 To prevent browser SSL warnings when running HTTPS tests locally, the
-web-platform-tests Root CA file `rootca.pem` in [tools/certs](tools/certs)
+web-platform-tests Root CA file `cacert.pem` in [tools/certs](tools/certs)
 must be added as a trusted certificate in your OS/browser.
 
 Publication
@@ -409,6 +409,14 @@ approve a pull request.  In particular, if a test change has already
 been adequately reviewed "upstream" in another repository, it can be
 pushed here without any further review by supplying a link to the
 upstream review.
+
+Search filters to find things to review:
+
+* [Open PRs (excluding vendor exports)](https://github.com/w3c/web-platform-tests/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen+-label%3A%22mozilla%3Agecko-sync%22+-label%3A%22chromium-export%22+-label%3A%22webkit-export%22+-label%3A%22servo-export%22)
+* [Reviewed but still open PRs (excluding vendor exports)](https://github.com/w3c/web-platform-tests/pulls?q=is%3Apr+is%3Aopen+-label%3Amozilla%3Agecko-sync+-label%3Achromium-export+-label%3Awebkit-export+-label%3Aservo-export+review%3Aapproved) (Merge? Something left to fix? Ping other reviewer?)
+* [Open PRs without owners](https://github.com/w3c/web-platform-tests/pulls?q=is%3Apr+is%3Aopen+label%3Astatus%3Aneeds-owners)
+* [Open PRs with label `infra` (excluding vendor exports)](https://github.com/w3c/web-platform-tests/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen+label%3Ainfra+-label%3A%22mozilla%3Agecko-sync%22+-label%3A%22chromium-export%22+-label%3A%22webkit-export%22+-label%3A%22servo-export%22)
+* [Open PRs with label `docs` (excluding vendor exports)](https://github.com/w3c/web-platform-tests/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen+label%3Adocs+-label%3A%22mozilla%3Agecko-sync%22+-label%3A%22chromium-export%22+-label%3A%22webkit-export%22+-label%3A%22servo-export%22)
 
 Getting Involved
 ================

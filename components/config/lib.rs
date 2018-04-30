@@ -6,6 +6,7 @@
 
 #[cfg(all(target_os = "android", not(feature = "gonk")))]
 extern crate android_injected_glue;
+extern crate embedder_traits;
 extern crate euclid;
 extern crate getopts;
 #[macro_use]
@@ -26,7 +27,6 @@ pub mod basedir;
 #[allow(unsafe_code)]
 pub mod opts;
 pub mod prefs;
-pub mod resource_files;
 
 pub fn servo_version() -> String {
     let cargo_version = env!("CARGO_PKG_VERSION");
