@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use AnimationState;
-use CompositorEvent;
 use DocumentState;
 use IFrameLoadInfo;
 use IFrameLoadInfoWithData;
@@ -82,14 +81,14 @@ pub enum ScriptMsg {
     CreateCanvasPaintThread(Size2D<i32>, IpcSender<(IpcSender<CanvasMsg>, CanvasId)>),
     /// Notifies the constellation that this frame has received focus.
     Focus,
-    /// Forward an event that was sent to the parent window.
-    ForwardEvent(PipelineId, CompositorEvent),
     /// Requests that the constellation retrieve the current contents of the clipboard
     GetClipboardContents(IpcSender<String>),
     /// Get the browsing context id for a given pipeline.
     GetBrowsingContextId(PipelineId, IpcSender<Option<BrowsingContextId>>),
     /// Get the parent info for a given pipeline.
     GetParentInfo(PipelineId, IpcSender<Option<PipelineId>>),
+    /// Get the nth child browsing context ID for a given browsing context, sorted in tree order.
+    GetChildBrowsingContextId(BrowsingContextId, usize, IpcSender<Option<BrowsingContextId>>),
     /// <head> tag finished parsing
     HeadParsed,
     /// All pending loads are complete, and the `load` event for this pipeline
@@ -148,6 +147,8 @@ pub enum ScriptMsg {
     TouchEventProcessed(EventResult),
     /// A log entry, with the top-level browsing context id and thread name
     LogEntry(Option<String>, LogEntry),
+    /// Discard the document.
+    DiscardDocument,
     /// Notifies the constellation that this pipeline has exited.
     PipelineExited,
     /// Send messages from postMessage calls from serviceworker

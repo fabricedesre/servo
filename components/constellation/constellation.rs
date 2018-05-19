@@ -1033,6 +1033,9 @@ impl<Message, LTF, STF> Constellation<Message, LTF, STF>
             FromScriptMsg::PipelineExited => {
                 self.handle_pipeline_exited(source_pipeline_id);
             }
+            FromScriptMsg::DiscardDocument => {
+                self.handle_discard_document(source_top_ctx_id, source_pipeline_id);
+            }
             FromScriptMsg::InitiateNavigateRequest(req_init, cancel_chan) => {
                 debug!("constellation got initiate navigate request message");
                 self.handle_navigate_request(source_pipeline_id, req_init, cancel_chan);
@@ -1110,9 +1113,6 @@ impl<Message, LTF, STF> Constellation<Message, LTF, STF>
             FromScriptMsg::Focus => {
                 debug!("constellation got focus message");
                 self.handle_focus_msg(source_pipeline_id);
-            }
-            FromScriptMsg::ForwardEvent(destination_pipeline_id, event) => {
-                self.forward_event(destination_pipeline_id, event);
             }
             FromScriptMsg::GetClipboardContents(sender) => {
                 let contents = match self.clipboard_ctx {
@@ -1229,6 +1229,15 @@ impl<Message, LTF, STF> Constellation<Message, LTF, STF>
                 let result = self.pipelines.get(&pipeline_id).and_then(|pipeline| pipeline.parent_info);
                 if let Err(e) = sender.send(result) {
                     warn!("Sending reply to get parent info failed ({:?}).", e);
+                }
+            }
+            FromScriptMsg::GetChildBrowsingContextId(browsing_context_id, index, sender) => {
+                // We increment here because the 0th element is the parent browsing context itself
+                let result = self.all_descendant_browsing_contexts_iter(browsing_context_id)
+                    .nth(index + 1)
+                    .map(|bc| bc.id);
+                if let Err(e) = sender.send(result) {
+                    warn!("Sending reply to get child browsing context ID failed ({:?}).", e);
                 }
             }
             FromScriptMsg::RegisterServiceWorker(scope_things, scope) => {
@@ -2549,6 +2558,8 @@ impl<Message, LTF, STF> Constellation<Message, LTF, STF>
                 self.notify_history_changed(change.top_level_browsing_context_id);
             },
             Some(old_pipeline_id) => {
+                // https://html.spec.whatwg.org/multipage/#unload-a-document
+                self.unload_document(old_pipeline_id);
                 // Deactivate the old pipeline, and activate the new one.
                 let (pipelines_to_close, states_to_close) = if let Some(replace_reloader) = change.replace {
                     let session_history = self.joint_session_histories
@@ -2997,6 +3008,28 @@ impl<Message, LTF, STF> Constellation<Message, LTF, STF>
         }
 
         debug!("Closed browsing context children {}.", browsing_context_id);
+    }
+
+    // Discard the pipeline for a given document, udpdate the joint session history.
+    fn handle_discard_document(&mut self,
+                               top_level_browsing_context_id: TopLevelBrowsingContextId,
+                               pipeline_id: PipelineId) {
+        let load_data = match self.pipelines.get(&pipeline_id) {
+            Some(pipeline) => pipeline.load_data.clone(),
+            None => return
+        };
+        self.joint_session_histories
+            .entry(top_level_browsing_context_id).or_insert(JointSessionHistory::new())
+            .replace_reloader(NeedsToReload::No(pipeline_id), NeedsToReload::Yes(pipeline_id, load_data));
+       self.close_pipeline(pipeline_id, DiscardBrowsingContext::No, ExitPipelineMode::Normal);
+    }
+
+    // Send a message to script requesting the document associated with this pipeline runs the 'unload' algorithm.
+    fn unload_document(&self, pipeline_id: PipelineId) {
+        if let Some(pipeline) = self.pipelines.get(&pipeline_id) {
+            let msg = ConstellationControlMsg::UnloadDocument(pipeline_id);
+            let _ = pipeline.event_loop.send(msg);
+        }
     }
 
     // Close all pipelines at and beneath a given browsing context

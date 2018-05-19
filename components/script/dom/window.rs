@@ -1550,7 +1550,7 @@ impl Window {
         // https://html.spec.whatwg.org/multipage/#navigating-across-documents
         if !force_reload && url.as_url()[..Position::AfterQuery] ==
             doc.url().as_url()[..Position::AfterQuery] {
-                // Step 5
+                // Step 6
                 if let Some(fragment) = url.fragment() {
                     doc.check_and_scroll_fragment(fragment);
                     doc.set_url(url.clone());
@@ -1559,9 +1559,24 @@ impl Window {
         }
 
         let pipeline_id = self.upcast::<GlobalScope>().pipeline_id();
-        self.main_thread_script_chan().send(
-            MainThreadScriptMsg::Navigate(pipeline_id,
-                LoadData::new(url, Some(pipeline_id), referrer_policy, Some(doc.url())), replace)).unwrap();
+
+        // Step 4
+        let window_proxy = self.window_proxy();
+        if let Some(active) = window_proxy.currently_active() {
+            if pipeline_id == active {
+                if doc.is_prompting_or_unloading() {
+                    return;
+                }
+            }
+        }
+
+        // Step 7
+        if doc.prompt_to_unload(false) {
+            self.main_thread_script_chan().send(
+                MainThreadScriptMsg::Navigate(pipeline_id,
+                    LoadData::new(url, Some(pipeline_id), referrer_policy, Some(doc.url())), replace)).unwrap();
+        };
+
     }
 
     pub fn handle_fire_timer(&self, timer_id: TimerEventId) {
@@ -1632,11 +1647,6 @@ impl Window {
         // If we didn't have a clip rect, the previous display doesn't need rebuilding
         // because it was built for infinite clip (MaxRect::amax_rect()).
         had_clip_rect
-    }
-
-    // https://html.spec.whatwg.org/multipage/#accessing-other-browsing-contexts
-    pub fn IndexedGetter(&self, _index: u32, _found: &mut bool) -> Option<DomRoot<Window>> {
-        None
     }
 
     pub fn suspend(&self) {

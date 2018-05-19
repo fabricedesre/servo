@@ -276,7 +276,7 @@ impl webrender_api::RenderNotifier for RenderNotifier {
         self.compositor_proxy.recomposite(CompositingReason::NewWebRenderFrame);
     }
 
-    fn new_document_ready(
+    fn new_frame_ready(
         &self,
         _document_id: webrender_api::DocumentId,
         scrolled: bool,
@@ -937,6 +937,7 @@ impl<Window: WindowMethods> IOCompositor<Window> {
             let cursor = webrender_api::WorldPoint::from_untyped(&cursor);
             let mut txn = webrender_api::Transaction::new();
             txn.scroll(scroll_location, cursor);
+            txn.generate_frame();
             self.webrender_api.send_transaction(self.webrender_document, txn);
             self.waiting_for_results_of_scroll = true
         }
@@ -1404,17 +1405,24 @@ impl<Window: WindowMethods> IOCompositor<Window> {
     }
 
     pub fn capture_webrender(&mut self) {
-        match env::current_dir() {
-            Ok(current_dir) => {
-                let capture_id = now().to_timespec().sec.to_string();
-                let capture_path = current_dir.join("capture_webrender").join(capture_id);
+        let capture_id = now().to_timespec().sec.to_string();
+        let available_path = [env::current_dir(), Ok(env::temp_dir())].iter()
+            .filter_map(|val| val.as_ref().map(|dir| dir.join("capture_webrender").join(&capture_id)).ok())
+            .find(|val| {
+                match create_dir_all(&val) {
+                    Ok(_) => true,
+                    Err(err) => {
+                        eprintln!("Unable to create path '{:?}' for capture: {:?}", &val, err);
+                        false
+                    }
+                }
+            });
+
+        match available_path {
+            Some(capture_path) => {
                 let revision_file_path = capture_path.join("wr.txt");
 
-                if let Err(err) = create_dir_all(&capture_path) {
-                    eprintln!("Unable to create path '{:?}' for capture: {:?}", capture_path, err);
-                    return
-                }
-
+                debug!("Trying to save webrender capture under {:?}", &revision_file_path);
                 self.webrender_api.save_capture(capture_path, webrender_api::CaptureBits::all());
 
                 match File::create(revision_file_path) {
@@ -1427,7 +1435,7 @@ impl<Window: WindowMethods> IOCompositor<Window> {
                     Err(err) => eprintln!("Capture triggered, creating webrender revision info skipped: {:?}", err)
                 }
             },
-            Err(err) => eprintln!("Unable to locate path to save captures: {:?}", err)
+            None => eprintln!("Unable to locate path to save captures")
         }
     }
 }

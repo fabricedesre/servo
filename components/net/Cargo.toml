@@ -4,6 +4,7 @@ version = "0.0.1"
 authors = ["The Servo Project Developers"]
 license = "MPL-2.0"
 publish = false
+autotests = false  # Inhibit lookup for tests/*.rs without [[test]] sections
 
 [lib]
 name = "net"
@@ -48,6 +49,9 @@ unicase = "1.4.0"
 url = "1.2"
 uuid = {version = "0.6", features = ["v4"]}
 webrender_api = {git = "https://github.com/servo/webrender", features = ["ipc"]}
+
+[dev-dependencies]
+embedder_traits = { path = "../embedder_traits", features = ["tests"] }
 
 [[test]]
 name = "main"
