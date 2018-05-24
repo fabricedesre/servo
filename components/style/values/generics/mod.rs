@@ -26,13 +26,13 @@ pub mod font;
 pub mod gecko;
 pub mod grid;
 pub mod image;
-pub mod pointing;
 pub mod position;
 pub mod rect;
 pub mod size;
 pub mod svg;
 pub mod text;
 pub mod transform;
+pub mod ui;
 pub mod url;
 
 // https://drafts.csswg.org/css-counter-styles/#typedef-symbols-type
@@ -156,7 +156,7 @@ impl SpecifiedValueInfo for CounterStyleOrNone {
 
 /// A wrapper of Non-negative values.
 #[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
-#[derive(Animate, Clone, ComputeSquaredDistance, Copy, Debug, MallocSizeOf,
+#[derive(Animate, Clone, ComputeSquaredDistance, Copy, Debug, Hash, MallocSizeOf,
          PartialEq, PartialOrd, SpecifiedValueInfo, ToAnimatedZero,
          ToComputedValue, ToCss)]
 pub struct NonNegative<T>(pub T);

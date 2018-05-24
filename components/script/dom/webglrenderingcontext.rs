@@ -1326,6 +1326,14 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
                 "WebGL GLSL ES 1.0".to_jsval(cx, rval.handle_mut());
                 return rval.get();
             }
+            constants::UNPACK_FLIP_Y_WEBGL => {
+                let unpack = self.texture_unpacking_settings.get();
+                return BooleanValue(unpack.contains(TextureUnpacking::FLIP_Y_AXIS));
+            }
+            constants::UNPACK_PREMULTIPLY_ALPHA_WEBGL => {
+                let unpack = self.texture_unpacking_settings.get();
+                return BooleanValue(unpack.contains(TextureUnpacking::PREMULTIPLY_ALPHA));
+            }
             _ => {}
         }
 
@@ -1412,13 +1420,7 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
         let (sender, receiver) = webgl_channel().unwrap();
         self.send_command(WebGLCommand::GetTexParameter(target, pname, sender));
 
-        match receiver.recv().unwrap() {
-            value if value != 0 => Int32Value(value),
-            _ => {
-                self.webgl_error(InvalidEnum);
-                NullValue()
-            }
-        }
+        Int32Value(receiver.recv().unwrap())
     }
 
     // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.3
@@ -1875,6 +1877,9 @@ impl WebGLRenderingContextMethods for WebGLRenderingContext {
     fn Clear(&self, mask: u32) {
         if !self.validate_framebuffer_complete() {
             return;
+        }
+        if mask & !(constants::DEPTH_BUFFER_BIT | constants::STENCIL_BUFFER_BIT | constants::COLOR_BUFFER_BIT) != 0 {
+            return self.webgl_error(InvalidValue);
         }
 
         self.send_command(WebGLCommand::Clear(mask));

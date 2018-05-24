@@ -109,11 +109,11 @@ pub mod longhands {
     <%include file="/longhand/inherited_box.mako.rs" />
     <%include file="/longhand/inherited_table.mako.rs" />
     <%include file="/longhand/inherited_text.mako.rs" />
+    <%include file="/longhand/inherited_ui.mako.rs" />
     <%include file="/longhand/list.mako.rs" />
     <%include file="/longhand/margin.mako.rs" />
     <%include file="/longhand/outline.mako.rs" />
     <%include file="/longhand/padding.mako.rs" />
-    <%include file="/longhand/pointing.mako.rs" />
     <%include file="/longhand/position.mako.rs" />
     <%include file="/longhand/table.mako.rs" />
     <%include file="/longhand/text.mako.rs" />
@@ -2305,13 +2305,10 @@ pub mod style_structs {
                 pub fn compute_font_hash(&mut self) {
                     // Corresponds to the fields in
                     // `gfx::font_template::FontTemplateDescriptor`.
-                    //
-                    // FIXME(emilio): Where's font-style?
                     let mut hasher: FnvHasher = Default::default();
-                    // We hash the floating point number with four decimal
-                    // places.
-                    hasher.write_u64((self.font_weight.0 * 10000.).trunc() as u64);
-                    hasher.write_u64(((self.font_stretch.0).0 * 10000.).trunc() as u64);
+                    self.font_weight.hash(&mut hasher);
+                    self.font_stretch.hash(&mut hasher);
+                    self.font_style.hash(&mut hasher);
                     self.font_family.hash(&mut hasher);
                     self.hash = hasher.finish()
                 }
@@ -2398,6 +2395,18 @@ pub mod style_structs {
                 pub fn ${longhand.ident}_mod(&self, index: usize)
                     -> longhands::${longhand.ident}::computed_value::SingleComputedValue {
                     self.${longhand.ident}_at(index % self.${longhand.ident}_count())
+                }
+
+                /// Clone the computed value for the property.
+                #[allow(non_snake_case)]
+                #[inline]
+                #[cfg(feature = "gecko")]
+                pub fn clone_${longhand.ident}(
+                    &self,
+                ) -> longhands::${longhand.ident}::computed_value::T {
+                    longhands::${longhand.ident}::computed_value::T(
+                        self.${longhand.ident}_iter().collect()
+                    )
                 }
             % endif
         % endfor
@@ -2631,10 +2640,10 @@ impl ComputedValuesInner {
     /// ineffective, and would yield an empty `::before` or `::after`
     /// pseudo-element.
     pub fn ineffective_content_property(&self) -> bool {
-        use properties::longhands::content::computed_value::T;
+        use values::generics::counters::Content;
         match self.get_counters().content {
-            T::Normal | T::None => true,
-            T::Items(ref items) => items.is_empty(),
+            Content::Normal | Content::None => true,
+            Content::Items(ref items) => items.is_empty(),
         }
     }
 
