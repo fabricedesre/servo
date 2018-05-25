@@ -74,15 +74,14 @@ use bluetooth::BluetoothThreadFactory;
 use bluetooth_traits::BluetoothRequest;
 use canvas::gl_context::GLContextFactory;
 use canvas::webgl_thread::WebGLThreads;
-use compositing::{IOCompositor, RenderNotifier, ShutdownState};
-use compositing::compositor_thread::{self, CompositorProxy, CompositorReceiver,
-                                     InitialCompositorState};
-use compositing::compositor_thread::{EmbedderMsg, EmbedderProxy, EmbedderReceiver};
+use compositing::{IOCompositor, ShutdownState, RenderNotifier};
+use compositing::compositor_thread::{CompositorProxy, CompositorReceiver, InitialCompositorState};
 use compositing::windowing::{WindowEvent, WindowMethods};
 use constellation::{Constellation, InitialConstellationState, UnprivilegedPipelineContent};
 use constellation::{FromCompositorLogger, FromScriptLogger};
 #[cfg(all(not(target_os = "windows"), not(target_os = "ios")))]
 use constellation::content_process_sandbox_profile;
+use embedder_traits::{EmbedderMsg, EmbedderProxy, EmbedderReceiver, EventLoopWaker};
 use env_logger::Builder as EnvLoggerBuilder;
 use euclid::Length;
 #[cfg(all(not(target_os = "windows"), not(target_os = "ios")))]
@@ -127,7 +126,7 @@ pub struct Servo<Window: WindowMethods + 'static> {
     compositor: IOCompositor<Window>,
     constellation_chan: Sender<ConstellationMsg>,
     embedder_receiver: EmbedderReceiver,
-    embedder_events: Vec<EmbedderMsg>,
+    embedder_events: Vec<(Option<BrowserId>, EmbedderMsg)>,
 }
 
 impl<Window> Servo<Window>
@@ -366,11 +365,18 @@ where
                     );
                 }
             }
+
+            WindowEvent::SendError(ctx, e) => {
+                let msg = ConstellationMsg::SendError(ctx, e);
+                if let Err(e) = self.constellation_chan.send(msg) {
+                    warn!("Sending CloseBrowser message to constellation failed ({}).", e);
+                }
+            }
         }
     }
 
     fn receive_messages(&mut self) {
-        while let Some(msg) = self.embedder_receiver.try_recv_embedder_msg() {
+        while let Some((top_level_browsing_context, msg)) = self.embedder_receiver.try_recv_embedder_msg() {
             match (msg, self.compositor.shutdown_state) {
                 (_, ShutdownState::FinishedShuttingDown) => {
                     error!(
@@ -380,22 +386,22 @@ where
 
                 (_, ShutdownState::ShuttingDown) => {}
 
-                (EmbedderMsg::KeyEvent(top_level_browsing_context, ch, key, state, modified),
+                (EmbedderMsg::KeyEvent(ch, key, state, modified),
                  ShutdownState::NotShuttingDown) => {
                     if state == KeyState::Pressed {
-                        let msg = EmbedderMsg::KeyEvent(top_level_browsing_context, ch, key, state, modified);
-                        self.embedder_events.push(msg);
+                        let event = (top_level_browsing_context, EmbedderMsg::KeyEvent(ch, key, state, modified));
+                        self.embedder_events.push(event);
                     }
                 },
 
                 (msg, ShutdownState::NotShuttingDown) => {
-                    self.embedder_events.push(msg);
+                    self.embedder_events.push((top_level_browsing_context, msg));
                 },
             }
         }
     }
 
-    pub fn get_events(&mut self) -> Vec<EmbedderMsg> {
+    pub fn get_events(&mut self) -> Vec<(Option<BrowserId>, EmbedderMsg)> {
         ::std::mem::replace(&mut self.embedder_events, Vec::new())
     }
 
@@ -409,7 +415,7 @@ where
         if self.compositor.shutdown_state != ShutdownState::FinishedShuttingDown {
             self.compositor.perform_updates();
         } else {
-            self.embedder_events.push(EmbedderMsg::Shutdown);
+            self.embedder_events.push((None, EmbedderMsg::Shutdown));
         }
     }
 
@@ -439,9 +445,8 @@ where
     }
 }
 
-fn create_embedder_channel(
-    event_loop_waker: Box<compositor_thread::EventLoopWaker>,
-) -> (EmbedderProxy, EmbedderReceiver) {
+fn create_embedder_channel(event_loop_waker: Box<EventLoopWaker>)
+    -> (EmbedderProxy, EmbedderReceiver) {
     let (sender, receiver) = channel();
     (
         EmbedderProxy {
@@ -452,9 +457,8 @@ fn create_embedder_channel(
     )
 }
 
-fn create_compositor_channel(
-    event_loop_waker: Box<compositor_thread::EventLoopWaker>,
-) -> (CompositorProxy, CompositorReceiver) {
+fn create_compositor_channel(event_loop_waker: Box<EventLoopWaker>)
+    -> (CompositorProxy, CompositorReceiver) {
     let (sender, receiver) = channel();
     (
         CompositorProxy {
