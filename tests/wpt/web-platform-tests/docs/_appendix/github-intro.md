@@ -105,6 +105,14 @@ repository.
 
     For additional information, please see the [GitHub docs][github-fork-docs].
 
+## Configure your environment
+
+If all you intend to do is to load [manual tests][manual-tests] or [ref tests][ref-tests] from your local file system,
+the above setup should be sufficient.
+But many tests (and in particular, all [testharness.js tests][testharness-tests]) require a local web server.
+
+See [Local Setup][local-setup] for more information.
+
 ## Branch
 
 Now that you have everything locally, create a branch for your tests.
@@ -169,6 +177,26 @@ them to be reviewed and merged.
         $ git commit -m "Tests for indexed getters in the HTMLExampleInterface"
 
 7.  Repeat these steps as many times as you'd like before you submit.
+
+## Verify
+
+The Web Platform Test project has an automated tool
+to verify that coding conventions have been followed,
+and to catch a number of common mistakes.
+
+You can and should run this tool locally.
+It will be run on your submissions anyway,
+and any failure will be grounds for rejection,
+so you might as well fix them first.
+
+1. On the command line, navigate to to the directory where your clone
+of the repository is located.
+
+2. Run `./wpt lint`
+
+3. Fix any mistake it reports and [commit](#commit) again.
+
+For more details, see the [documentation about the lint tool][lint-tool]
 
 ## Submit
 
@@ -362,6 +390,10 @@ If you do not expect work with more PRs from the same author,
 you may also discard your connection to their repo:
 `git remote remove <author-id>`
 
+[local-setup]: {{ site.baseurl }}/introduction.html#local-setup
+[manual-tests]: {{ site.baseurl }}/writing-tests/manual.html
+[ref-tests]: {{ site.baseurl }}/writing-tests/reftests.html
+[testharness-tests]: {{ site.baseurl }}/writing-tests/testharness.html
 [branch]: #branch
 [commit]: #commit
 [clone]: #clone
@@ -387,3 +419,4 @@ you may also discard your connection to their repo:
 [files-changed]: {{ site.baseurl }}{% link /assets/files-changed.png %}
 [more-commits]: {{ site.baseurl }}{% link /assets/more-commits.png %}
 [github flow]: https://guides.github.com/introduction/flow/
+[lint-tool]: {{ site.baseurl }}/writing-tests/lint-tool.html
