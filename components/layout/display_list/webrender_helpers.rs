@@ -7,11 +7,12 @@
 //           This might be achieved by sharing types between WR and Servo display lists, or
 //           completely converting layout to directly generate WebRender display lists, for example.
 
-use display_list::items::{BorderDetails, ClipScrollNode};
-use display_list::items::{ClipScrollNodeIndex, ClipScrollNodeType, DisplayItem};
-use display_list::items::{DisplayList, StackingContextType};
+use display_list::items::{BorderDetails, ClipScrollNode, ClipScrollNodeIndex, ClipScrollNodeType};
+use display_list::items::{DisplayItem, DisplayList, StackingContextType};
+use euclid::SideOffsets2D;
 use msg::constellation_msg::PipelineId;
 use webrender_api::{self, ClipAndScrollInfo, ClipId, DisplayListBuilder, GlyphRasterSpace};
+use webrender_api::LayoutPoint;
 
 pub trait WebRenderDisplayListConverter {
     fn convert_to_webrender(&self, pipeline_id: PipelineId) -> DisplayListBuilder;
@@ -132,30 +133,50 @@ impl WebRenderDisplayItemConverter for DisplayItem {
                     BorderDetails::Normal(ref border) => {
                         webrender_api::BorderDetails::Normal(*border)
                     },
-                    BorderDetails::Image(ref image) => webrender_api::BorderDetails::NinePatch(*image),
+                    BorderDetails::Image(ref image) => {
+                        webrender_api::BorderDetails::NinePatch(*image)
+                    }
                     BorderDetails::Gradient(ref gradient) => {
-                        webrender_api::BorderDetails::Gradient(webrender_api::GradientBorder {
-                            gradient: builder.create_gradient(
-                                gradient.gradient.start_point,
-                                gradient.gradient.end_point,
-                                gradient.gradient.stops.clone(),
-                                gradient.gradient.extend_mode,
-                            ),
+                        let wr_gradient = builder.create_gradient(
+                            gradient.gradient.start_point,
+                            gradient.gradient.end_point,
+                            gradient.gradient.stops.clone(),
+                            gradient.gradient.extend_mode,
+                        );
+
+                        let details = webrender_api::NinePatchBorder {
+                            source: webrender_api::NinePatchBorderSource::Gradient(wr_gradient),
+                            width: 0,
+                            height: 0,
+                            slice: SideOffsets2D::zero(),
+                            fill: false,
+                            repeat_horizontal: webrender_api::RepeatMode::Stretch,
+                            repeat_vertical: webrender_api::RepeatMode::Stretch,
                             outset: gradient.outset,
-                        })
+                        };
+
+                        webrender_api::BorderDetails::NinePatch(details)
                     },
                     BorderDetails::RadialGradient(ref gradient) => {
-                        webrender_api::BorderDetails::RadialGradient(
-                            webrender_api::RadialGradientBorder {
-                                gradient: builder.create_radial_gradient(
-                                    gradient.gradient.center,
-                                    gradient.gradient.radius,
-                                    gradient.gradient.stops.clone(),
-                                    gradient.gradient.extend_mode,
-                                ),
-                                outset: gradient.outset,
-                            },
-                        )
+                        let wr_gradient = builder.create_radial_gradient(
+                            gradient.gradient.center,
+                            gradient.gradient.radius,
+                            gradient.gradient.stops.clone(),
+                            gradient.gradient.extend_mode,
+                        );
+
+                        let details = webrender_api::NinePatchBorder {
+                            source: webrender_api::NinePatchBorderSource::RadialGradient(wr_gradient),
+                            width: 0,
+                            height: 0,
+                            slice: SideOffsets2D::zero(),
+                            fill: false,
+                            repeat_horizontal: webrender_api::RepeatMode::Stretch,
+                            repeat_vertical: webrender_api::RepeatMode::Stretch,
+                            outset: gradient.outset,
+                        };
+
+                        webrender_api::BorderDetails::NinePatch(details)
                     },
                 };
 
@@ -213,29 +234,42 @@ impl WebRenderDisplayItemConverter for DisplayItem {
                 builder.pop_all_shadows();
             },
             DisplayItem::Iframe(ref item) => {
-                builder.push_iframe(&self.prim_info(), item.iframe.to_webrender());
+                builder.push_iframe(&self.prim_info(), item.iframe.to_webrender(), true);
             },
             DisplayItem::PushStackingContext(ref item) => {
                 let stacking_context = &item.stacking_context;
                 debug_assert_eq!(stacking_context.context_type, StackingContextType::Real);
 
-                let reference_frame_clip_id = builder.push_stacking_context(
-                    &webrender_api::LayoutPrimitiveInfo::new(stacking_context.bounds),
+                let mut info = webrender_api::LayoutPrimitiveInfo::new(stacking_context.bounds);
+                if let Some(frame_index) = stacking_context.established_reference_frame {
+                    debug_assert!(
+                        stacking_context.transform.is_some() ||
+                        stacking_context.perspective.is_some()
+                    );
+
+                    let clip_id = builder.push_reference_frame(
+                        &info.clone(),
+                        stacking_context.transform.map(Into::into),
+                        stacking_context.perspective,
+                    );
+                    clip_ids[frame_index.to_index()] = Some(clip_id);
+
+                    info.rect.origin = LayoutPoint::zero();
+                    info.clip_rect.origin = LayoutPoint::zero();
+                    builder.push_clip_id(clip_id);
+                }
+
+                builder.push_stacking_context(
+                    &info,
                     None,
-                    stacking_context.scroll_policy,
-                    stacking_context.transform.map(Into::into),
                     stacking_context.transform_style,
-                    stacking_context.perspective,
                     stacking_context.mix_blend_mode,
                     stacking_context.filters.clone(),
                     GlyphRasterSpace::Screen,
                 );
 
-                match (reference_frame_clip_id, stacking_context.established_reference_frame) {
-                    (Some(webrender_id), Some(frame_index)) =>
-                        clip_ids[frame_index.to_index()] = Some(webrender_id),
-                    (None, None) => {},
-                    _ => warn!("Mismatch between reference frame establishment!"),
+                if stacking_context.established_reference_frame.is_some() {
+                    builder.pop_clip_id();
                 }
             },
             DisplayItem::PopStackingContext(_) => builder.pop_stacking_context(),

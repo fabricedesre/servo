@@ -268,13 +268,13 @@ impl<VR: WebVRRenderHandler + 'static, OB: WebGLThreadObserver> WebGLThread<VR, 
     fn remove_webgl_context(&mut self, context_id: WebGLContextId) {
         // Release webrender image keys.
         if let Some(info) = self.cached_context_info.remove(&context_id) {
-            let mut updates = webrender_api::ResourceUpdates::new();
+            let mut txn = webrender_api::Transaction::new();
 
             if let Some(image_key) = info.image_key {
-                updates.delete_image(image_key);
+                txn.delete_image(image_key);
             }
 
-            self.webrender_api.update_resources(updates)
+            self.webrender_api.update_resources(txn.resource_updates)
         }
 
         // Release GL context.
@@ -423,12 +423,9 @@ impl<VR: WebVRRenderHandler + 'static, OB: WebGLThreadObserver> WebGLThread<VR, 
         let data = Self::external_image_data(context_id);
 
         let image_key = webrender_api.generate_image_key();
-        let mut updates = webrender_api::ResourceUpdates::new();
-        updates.add_image(image_key,
-                          descriptor,
-                          data,
-                          None);
-        webrender_api.update_resources(updates);
+        let mut txn = webrender_api::Transaction::new();
+        txn.add_image(image_key, descriptor, data, None);
+        webrender_api.update_resources(txn.resource_updates);
 
         image_key
     }
@@ -442,12 +439,9 @@ impl<VR: WebVRRenderHandler + 'static, OB: WebGLThreadObserver> WebGLThread<VR, 
         let descriptor = Self::image_descriptor(size, alpha);
         let data = Self::external_image_data(context_id);
 
-        let mut updates = webrender_api::ResourceUpdates::new();
-        updates.update_image(image_key,
-                             descriptor,
-                             data,
-                             None);
-        webrender_api.update_resources(updates);
+        let mut txn = webrender_api::Transaction::new();
+        txn.update_image(image_key, descriptor, data, None);
+        webrender_api.update_resources(txn.resource_updates);
     }
 
     /// Creates a `webrender_api::ImageKey` that uses raw pixels.
@@ -459,12 +453,9 @@ impl<VR: WebVRRenderHandler + 'static, OB: WebGLThreadObserver> WebGLThread<VR, 
         let data = webrender_api::ImageData::new(data);
 
         let image_key = webrender_api.generate_image_key();
-        let mut updates = webrender_api::ResourceUpdates::new();
-        updates.add_image(image_key,
-                          descriptor,
-                          data,
-                          None);
-        webrender_api.update_resources(updates);
+        let mut txn = webrender_api::Transaction::new();
+        txn.add_image(image_key, descriptor, data, None);
+        webrender_api.update_resources(txn.resource_updates);
 
         image_key
     }
@@ -478,19 +469,15 @@ impl<VR: WebVRRenderHandler + 'static, OB: WebGLThreadObserver> WebGLThread<VR, 
         let descriptor = Self::image_descriptor(size, alpha);
         let data = webrender_api::ImageData::new(data);
 
-        let mut updates = webrender_api::ResourceUpdates::new();
-        updates.update_image(image_key,
-                             descriptor,
-                             data,
-                             None);
-        webrender_api.update_resources(updates);
+        let mut txn = webrender_api::Transaction::new();
+        txn.update_image(image_key, descriptor, data, None);
+        webrender_api.update_resources(txn.resource_updates);
     }
 
     /// Helper function to create a `webrender_api::ImageDescriptor`.
     fn image_descriptor(size: Size2D<i32>, alpha: bool) -> webrender_api::ImageDescriptor {
         webrender_api::ImageDescriptor {
-            width: size.width as u32,
-            height: size.height as u32,
+            size: webrender_api::DeviceUintSize::new(size.width as u32, size.height as u32),
             stride: None,
             format: webrender_api::ImageFormat::BGRA8,
             offset: 0,
@@ -659,8 +646,9 @@ impl WebGLImpl {
                 ctx.gl().attach_shader(program_id.get(), shader_id.get()),
             WebGLCommand::DetachShader(program_id, shader_id) =>
                 ctx.gl().detach_shader(program_id.get(), shader_id.get()),
-            WebGLCommand::BindAttribLocation(program_id, index, ref name) =>
-                ctx.gl().bind_attrib_location(program_id.get(), index, name),
+            WebGLCommand::BindAttribLocation(program_id, index, ref name) => {
+                ctx.gl().bind_attrib_location(program_id.get(), index, &to_name_in_compiled_shader(name))
+            }
             WebGLCommand::BlendColor(r, g, b, a) =>
                 ctx.gl().blend_color(r, g, b, a),
             WebGLCommand::BlendEquation(mode) =>
@@ -721,8 +709,6 @@ impl WebGLImpl {
                 ctx.gl().enable_vertex_attrib_array(attrib_id),
             WebGLCommand::Hint(name, val) =>
                 ctx.gl().hint(name, val),
-            WebGLCommand::IsEnabled(cap, ref chan) =>
-                chan.send(ctx.gl().is_enabled(cap) != 0).unwrap(),
             WebGLCommand::LineWidth(width) =>
                 ctx.gl().line_width(width),
             WebGLCommand::PixelStorei(name, val) =>
@@ -749,18 +735,10 @@ impl WebGLImpl {
                 ctx.gl().stencil_op(fail, zfail, zpass),
             WebGLCommand::StencilOpSeparate(face, fail, zfail, zpass) =>
                 ctx.gl().stencil_op_separate(face, fail, zfail, zpass),
-            WebGLCommand::GetActiveAttrib(program_id, index, ref chan) =>
-                Self::active_attrib(ctx.gl(), program_id, index, chan),
-            WebGLCommand::GetActiveUniform(program_id, index, ref chan) =>
-                Self::active_uniform(ctx.gl(), program_id, index, chan),
-            WebGLCommand::GetAttribLocation(program_id, ref name, ref chan) =>
-                Self::attrib_location(ctx.gl(), program_id, name, chan),
             WebGLCommand::GetRenderbufferParameter(target, pname, ref chan) =>
                 Self::get_renderbuffer_parameter(ctx.gl(), target, pname, chan),
             WebGLCommand::GetFramebufferAttachmentParameter(target, attachment, pname, ref chan) =>
                 Self::get_framebuffer_attachment_parameter(ctx.gl(), target, attachment, pname, chan),
-            WebGLCommand::GetVertexAttribOffset(index, pname, ref chan) =>
-                Self::vertex_attrib_offset(ctx.gl(), index, pname, chan),
             WebGLCommand::GetShaderPrecisionFormat(shader_type, precision_type, ref chan) =>
                 Self::shader_precision_format(ctx.gl(), shader_type, precision_type, chan),
             WebGLCommand::GetExtensions(ref chan) =>
@@ -805,8 +783,6 @@ impl WebGLImpl {
                 ctx.gl().bind_renderbuffer(target, id.map_or(0, WebGLRenderbufferId::get)),
             WebGLCommand::BindTexture(target, id) =>
                 ctx.gl().bind_texture(target, id.map_or(0, WebGLTextureId::get)),
-            WebGLCommand::LinkProgram(program_id) =>
-                ctx.gl().link_program(program_id.get()),
             WebGLCommand::Uniform1f(uniform_id, v) =>
                 ctx.gl().uniform_1f(uniform_id, v),
             WebGLCommand::Uniform1fv(uniform_id, ref v) =>
@@ -839,14 +815,15 @@ impl WebGLImpl {
                 ctx.gl().uniform_4i(uniform_id, x, y, z, w),
             WebGLCommand::Uniform4iv(uniform_id, ref v) =>
                 ctx.gl().uniform_4iv(uniform_id, v),
-            WebGLCommand::UniformMatrix2fv(uniform_id, transpose,  ref v) =>
-                ctx.gl().uniform_matrix_2fv(uniform_id, transpose, v),
-            WebGLCommand::UniformMatrix3fv(uniform_id, transpose,  ref v) =>
-                ctx.gl().uniform_matrix_3fv(uniform_id, transpose, v),
-            WebGLCommand::UniformMatrix4fv(uniform_id, transpose,  ref v) =>
-                ctx.gl().uniform_matrix_4fv(uniform_id, transpose, v),
-            WebGLCommand::UseProgram(program_id) =>
-                ctx.gl().use_program(program_id.get()),
+            WebGLCommand::UniformMatrix2fv(uniform_id, ref v) => {
+                ctx.gl().uniform_matrix_2fv(uniform_id, false, v)
+            }
+            WebGLCommand::UniformMatrix3fv(uniform_id, ref v) => {
+                ctx.gl().uniform_matrix_3fv(uniform_id, false, v)
+            }
+            WebGLCommand::UniformMatrix4fv(uniform_id, ref v) => {
+                ctx.gl().uniform_matrix_4fv(uniform_id, false, v)
+            }
             WebGLCommand::ValidateProgram(program_id) =>
                 ctx.gl().validate_program(program_id.get()),
             WebGLCommand::VertexAttrib(attrib_id, x, y, z, w) =>
@@ -906,6 +883,13 @@ impl WebGLImpl {
                 }
                 sender.send(value[0]).unwrap()
             }
+            WebGLCommand::GetParameterInt2(param, ref sender) => {
+                let mut value = [0; 2];
+                unsafe {
+                    ctx.gl().get_integer_v(param as u32, &mut value);
+                }
+                sender.send(value).unwrap()
+            }
             WebGLCommand::GetParameterInt4(param, ref sender) => {
                 let mut value = [0; 4];
                 unsafe {
@@ -934,17 +918,17 @@ impl WebGLImpl {
                 }
                 sender.send(value).unwrap()
             }
-            WebGLCommand::GetProgramParameterBool(program, param, ref sender) => {
+            WebGLCommand::GetProgramValidateStatus(program, ref sender) => {
                 let mut value = [0];
                 unsafe {
-                    ctx.gl().get_program_iv(program.get(), param as u32, &mut value);
+                    ctx.gl().get_program_iv(program.get(), gl::VALIDATE_STATUS, &mut value);
                 }
                 sender.send(value[0] != 0).unwrap()
             }
-            WebGLCommand::GetProgramParameterInt(program, param, ref sender) => {
+            WebGLCommand::GetProgramActiveUniforms(program, ref sender) => {
                 let mut value = [0];
                 unsafe {
-                    ctx.gl().get_program_iv(program.get(), param as u32, &mut value);
+                    ctx.gl().get_program_iv(program.get(), gl::ACTIVE_UNIFORMS, &mut value);
                 }
                 sender.send(value[0]).unwrap()
             }
@@ -962,56 +946,12 @@ impl WebGLImpl {
                 }
                 sender.send(value[0]).unwrap()
             }
-            WebGLCommand::GetVertexAttribBool(index, param, ref sender) => {
-                // FIXME(nox): https://github.com/servo/servo/issues/20608
-                let mut max = [0];
+            WebGLCommand::GetCurrentVertexAttrib(index, ref sender) => {
+                let mut value = [0.; 4];
                 unsafe {
-                    ctx.gl().get_integer_v(gl::MAX_VERTEX_ATTRIBS, &mut max);
+                    ctx.gl().get_vertex_attrib_fv(index, gl::CURRENT_VERTEX_ATTRIB, &mut value);
                 }
-                let result = if index >= max[0] as u32 {
-                    Err(WebGLError::InvalidValue)
-                } else {
-                    let mut value = [0];
-                    unsafe {
-                        ctx.gl().get_vertex_attrib_iv(index, param as u32, &mut value);
-                    }
-                    Ok(value[0] != 0)
-                };
-                sender.send(result).unwrap();
-            }
-            WebGLCommand::GetVertexAttribInt(index, param, ref sender) => {
-                // FIXME(nox): https://github.com/servo/servo/issues/20608
-                let mut max = [0];
-                unsafe {
-                    ctx.gl().get_integer_v(gl::MAX_VERTEX_ATTRIBS, &mut max);
-                }
-                let result = if index >= max[0] as u32 {
-                    Err(WebGLError::InvalidValue)
-                } else {
-                    let mut value = [0];
-                    unsafe {
-                        ctx.gl().get_vertex_attrib_iv(index, param as u32, &mut value);
-                    }
-                    Ok(value[0])
-                };
-                sender.send(result).unwrap();
-            }
-            WebGLCommand::GetVertexAttribFloat4(index, param, ref sender) => {
-                // FIXME(nox): https://github.com/servo/servo/issues/20608
-                let mut max = [0];
-                unsafe {
-                    ctx.gl().get_integer_v(gl::MAX_VERTEX_ATTRIBS, &mut max);
-                }
-                let result = if index >= max[0] as u32 {
-                    Err(WebGLError::InvalidValue)
-                } else {
-                    let mut value = [0.; 4];
-                    unsafe {
-                        ctx.gl().get_vertex_attrib_fv(index, param as u32, &mut value);
-                    }
-                    Ok(value)
-                };
-                sender.send(result).unwrap();
+                sender.send(value).unwrap();
             }
             WebGLCommand::GetTexParameterFloat(target, param, ref sender) => {
                 sender.send(ctx.gl().get_tex_parameter_fv(target, param as u32)).unwrap();
@@ -1025,6 +965,134 @@ impl WebGLImpl {
             WebGLCommand::TexParameterf(target, param, value) => {
                 ctx.gl().tex_parameter_f(target, param as u32, value)
             }
+            WebGLCommand::LinkProgram(program_id, ref sender) => {
+                return sender.send(Self::link_program(ctx.gl(), program_id)).unwrap();
+            }
+            WebGLCommand::UseProgram(program_id) => {
+                ctx.gl().use_program(program_id.map_or(0, |p| p.get()))
+            }
+            WebGLCommand::DrawArraysInstanced { mode, first, count, primcount } => {
+                ctx.gl().draw_arrays_instanced(mode, first, count, primcount)
+            }
+            WebGLCommand::DrawElementsInstanced { mode, count, type_, offset, primcount } => {
+                ctx.gl().draw_elements_instanced(mode, count, type_, offset, primcount)
+            }
+            WebGLCommand::VertexAttribDivisor { index, divisor } => {
+                ctx.gl().vertex_attrib_divisor(index, divisor)
+            }
+            WebGLCommand::GetUniformBool(program_id, loc, ref sender) => {
+                let mut value = [0];
+                unsafe {
+                    ctx.gl().get_uniform_iv(program_id.get(), loc, &mut value);
+                }
+                sender.send(value[0] != 0).unwrap();
+            }
+            WebGLCommand::GetUniformBool2(program_id, loc, ref sender) => {
+                let mut value = [0; 2];
+                unsafe {
+                    ctx.gl().get_uniform_iv(program_id.get(), loc, &mut value);
+                }
+                let value = [
+                    value[0] != 0,
+                    value[1] != 0,
+                ];
+                sender.send(value).unwrap();
+            }
+            WebGLCommand::GetUniformBool3(program_id, loc, ref sender) => {
+                let mut value = [0; 3];
+                unsafe {
+                    ctx.gl().get_uniform_iv(program_id.get(), loc, &mut value);
+                }
+                let value = [
+                    value[0] != 0,
+                    value[1] != 0,
+                    value[2] != 0,
+                ];
+                sender.send(value).unwrap();
+            }
+            WebGLCommand::GetUniformBool4(program_id, loc, ref sender) => {
+                let mut value = [0; 4];
+                unsafe {
+                    ctx.gl().get_uniform_iv(program_id.get(), loc, &mut value);
+                }
+                let value = [
+                    value[0] != 0,
+                    value[1] != 0,
+                    value[2] != 0,
+                    value[3] != 0,
+                ];
+                sender.send(value).unwrap();
+            }
+            WebGLCommand::GetUniformInt(program_id, loc, ref sender) => {
+                let mut value = [0];
+                unsafe {
+                    ctx.gl().get_uniform_iv(program_id.get(), loc, &mut value);
+                }
+                sender.send(value[0]).unwrap();
+            }
+            WebGLCommand::GetUniformInt2(program_id, loc, ref sender) => {
+                let mut value = [0; 2];
+                unsafe {
+                    ctx.gl().get_uniform_iv(program_id.get(), loc, &mut value);
+                }
+                sender.send(value).unwrap();
+            }
+            WebGLCommand::GetUniformInt3(program_id, loc, ref sender) => {
+                let mut value = [0; 3];
+                unsafe {
+                    ctx.gl().get_uniform_iv(program_id.get(), loc, &mut value);
+                }
+                sender.send(value).unwrap();
+            }
+            WebGLCommand::GetUniformInt4(program_id, loc, ref sender) => {
+                let mut value = [0; 4];
+                unsafe {
+                    ctx.gl().get_uniform_iv(program_id.get(), loc, &mut value);
+                }
+                sender.send(value).unwrap();
+            }
+            WebGLCommand::GetUniformFloat(program_id, loc, ref sender) => {
+                let mut value = [0.];
+                unsafe {
+                    ctx.gl().get_uniform_fv(program_id.get(), loc, &mut value);
+                }
+                sender.send(value[0]).unwrap();
+            }
+            WebGLCommand::GetUniformFloat2(program_id, loc, ref sender) => {
+                let mut value = [0.; 2];
+                unsafe {
+                    ctx.gl().get_uniform_fv(program_id.get(), loc, &mut value);
+                }
+                sender.send(value).unwrap();
+            }
+            WebGLCommand::GetUniformFloat3(program_id, loc, ref sender) => {
+                let mut value = [0.; 3];
+                unsafe {
+                    ctx.gl().get_uniform_fv(program_id.get(), loc, &mut value);
+                }
+                sender.send(value).unwrap();
+            }
+            WebGLCommand::GetUniformFloat4(program_id, loc, ref sender) => {
+                let mut value = [0.; 4];
+                unsafe {
+                    ctx.gl().get_uniform_fv(program_id.get(), loc, &mut value);
+                }
+                sender.send(value).unwrap();
+            }
+            WebGLCommand::GetUniformFloat9(program_id, loc, ref sender) => {
+                let mut value = [0.; 9];
+                unsafe {
+                    ctx.gl().get_uniform_fv(program_id.get(), loc, &mut value);
+                }
+                sender.send(value).unwrap();
+            }
+            WebGLCommand::GetUniformFloat16(program_id, loc, ref sender) => {
+                let mut value = [0.; 16];
+                unsafe {
+                    ctx.gl().get_uniform_fv(program_id.get(), loc, &mut value);
+                }
+                sender.send(value).unwrap();
+            }
         }
 
         // TODO: update test expectations in order to enable debug assertions
@@ -1033,6 +1101,70 @@ impl WebGLImpl {
             error!("Last GL operation failed: {:?}", command)
         }
         assert_eq!(error, gl::NO_ERROR, "Unexpected WebGL error: 0x{:x} ({})", error, error);
+    }
+
+    #[allow(unsafe_code)]
+    fn link_program(gl: &gl::Gl, program: WebGLProgramId) -> ProgramLinkInfo {
+        gl.link_program(program.get());
+        let mut linked = [0];
+        unsafe {
+            gl.get_program_iv(program.get(), gl::LINK_STATUS, &mut linked);
+        }
+        if linked[0] == 0 {
+            return ProgramLinkInfo {
+                linked: false,
+                active_attribs: vec![].into(),
+                active_uniforms: vec![].into(),
+            }
+        }
+
+        let mut num_active_attribs = [0];
+        unsafe {
+            gl.get_program_iv(program.get(), gl::ACTIVE_ATTRIBUTES, &mut num_active_attribs);
+        }
+        let active_attribs = (0..num_active_attribs[0] as u32).map(|i| {
+            // FIXME(nox): This allocates strings sometimes for nothing
+            // and the gleam method keeps getting ACTIVE_ATTRIBUTE_MAX_LENGTH.
+            let (size, type_, name) = gl.get_active_attrib(program.get(), i);
+            let location = if name.starts_with("gl_") {
+                -1
+            } else {
+                gl.get_attrib_location(program.get(), &name)
+            };
+            ActiveAttribInfo {
+                name: from_name_in_compiled_shader(&name),
+                size,
+                type_,
+                location,
+            }
+        }).collect::<Vec<_>>().into();
+
+        let mut num_active_uniforms = [0];
+        unsafe {
+            gl.get_program_iv(program.get(), gl::ACTIVE_UNIFORMS, &mut num_active_uniforms);
+        }
+        let active_uniforms = (0..num_active_uniforms[0] as u32).map(|i| {
+            // FIXME(nox): This allocates strings sometimes for nothing
+            // and the gleam method keeps getting ACTIVE_UNIFORM_MAX_LENGTH.
+            let (size, type_, mut name) = gl.get_active_uniform(program.get(), i);
+            let is_array = name.ends_with("[0]");
+            if is_array {
+                // FIXME(nox): NLL
+                let len = name.len();
+                name.truncate(len - 3);
+            }
+            ActiveUniformInfo {
+                base_name: from_name_in_compiled_shader(&name).into(),
+                size: if is_array { Some(size) } else { None },
+                type_,
+            }
+        }).collect::<Vec<_>>().into();
+
+        ProgramLinkInfo {
+            linked: true,
+            active_attribs,
+            active_uniforms,
+        }
     }
 
     fn read_pixels(
@@ -1049,68 +1181,9 @@ impl WebGLImpl {
       chan.send(result.into()).unwrap()
     }
 
-    #[allow(unsafe_code)]
-    fn active_attrib(
-        gl: &gl::Gl,
-        program_id: WebGLProgramId,
-        index: u32,
-        chan: &WebGLSender<WebGLResult<(i32, u32, String)>>,
-    ) {
-        let mut max = [0];
-        unsafe {
-            gl.get_program_iv(program_id.get(), gl::ACTIVE_ATTRIBUTES, &mut max);
-        }
-        let result = if index >= max[0] as u32 {
-            Err(WebGLError::InvalidValue)
-        } else {
-            Ok(gl.get_active_attrib(program_id.get(), index))
-        };
-        chan.send(result).unwrap();
-    }
-
-    #[allow(unsafe_code)]
-    fn active_uniform(gl: &gl::Gl,
-                      program_id: WebGLProgramId,
-                      index: u32,
-                      chan: &WebGLSender<WebGLResult<(i32, u32, String)>>) {
-        let mut max = [0];
-        unsafe {
-            gl.get_program_iv(program_id.get(), gl::ACTIVE_UNIFORMS, &mut max);
-        }
-        let result = if index >= max[0] as u32 {
-            Err(WebGLError::InvalidValue)
-        } else {
-            Ok(gl.get_active_uniform(program_id.get(), index))
-        };
-        chan.send(result).unwrap();
-    }
-
-    fn attrib_location(gl: &gl::Gl,
-                       program_id: WebGLProgramId,
-                       name: &str,
-                       chan: &WebGLSender<Option<i32>> ) {
-        let attrib_location = gl.get_attrib_location(program_id.get(), name);
-
-        let attrib_location = if attrib_location == -1 {
-            None
-        } else {
-            Some(attrib_location)
-        };
-
-        chan.send(attrib_location).unwrap();
-    }
-
     fn finish(gl: &gl::Gl, chan: &WebGLSender<()>) {
         gl.finish();
         chan.send(()).unwrap();
-    }
-
-    fn vertex_attrib_offset(gl: &gl::Gl,
-                            index: u32,
-                            pname: u32,
-                            chan: &WebGLSender<isize>) {
-        let result = gl.get_vertex_attrib_pointer_v(index, pname);
-        chan.send(result).unwrap();
     }
 
     fn shader_precision_format(gl: &gl::Gl,
@@ -1148,17 +1221,14 @@ impl WebGLImpl {
         chan.send(parameter).unwrap();
     }
 
-    fn uniform_location(gl: &gl::Gl,
-                        program_id: WebGLProgramId,
-                        name: &str,
-                        chan: &WebGLSender<Option<i32>>) {
-        let location = gl.get_uniform_location(program_id.get(), name);
-        let location = if location == -1 {
-            None
-        } else {
-            Some(location)
-        };
-
+    fn uniform_location(
+        gl: &gl::Gl,
+        program_id: WebGLProgramId,
+        name: &str,
+        chan: &WebGLSender<i32>,
+    ) {
+        let location = gl.get_uniform_location(program_id.get(), &to_name_in_compiled_shader(name));
+        assert!(location >= 0);
         chan.send(location).unwrap();
     }
 
@@ -1270,4 +1340,40 @@ impl WebGLImpl {
         gl.shader_source(shader_id.get(), &[source.as_bytes()]);
         gl.compile_shader(shader_id.get());
     }
+}
+
+/// ANGLE adds a `_u` prefix to variable names:
+///
+/// https://chromium.googlesource.com/angle/angle/+/855d964bd0d05f6b2cb303f625506cf53d37e94f
+///
+/// To avoid hard-coding this we would need to use the `sh::GetAttributes` and `sh::GetUniforms`
+/// API to look up the `x.name` and `x.mappedName` members.
+const ANGLE_NAME_PREFIX: &'static str = "_u";
+
+fn to_name_in_compiled_shader(s: &str) -> String {
+    map_dot_separated(s, |s, mapped| {
+        mapped.push_str(ANGLE_NAME_PREFIX);
+        mapped.push_str(s);
+    })
+}
+
+fn from_name_in_compiled_shader(s: &str) -> String {
+    map_dot_separated(s, |s, mapped| {
+        mapped.push_str(if s.starts_with(ANGLE_NAME_PREFIX) {
+            &s[ANGLE_NAME_PREFIX.len()..]
+        } else {
+            s
+        })
+    })
+}
+
+fn map_dot_separated<F: Fn(&str, &mut String)>(s: &str, f: F) -> String {
+    let mut iter = s.split('.');
+    let mut mapped = String::new();
+    f(iter.next().unwrap(), &mut mapped);
+    for s in iter {
+        mapped.push('.');
+        f(s, &mut mapped);
+    }
+    mapped
 }

@@ -15,7 +15,7 @@ test = false
 doctest = false
 
 [dependencies]
-euclid = "0.17"
+euclid = "0.18"
 embedder_traits = { path = "../embedder_traits" }
 getopts = "0.2.11"
 lazy_static = "1"
@@ -31,8 +31,8 @@ url = "1.2"
 env_logger = "0.5"
 embedder_traits = { path = "../embedder_traits", features = ["tests"] }
 
-[target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
-xdg = "2.0"
+[target.'cfg(not(target_os = "android"))'.dependencies]
+dirs = "1.0"
 
 # [target.'cfg(all(target_os = "android", not(feature = "gonk")))'.dependencies]
 # android_injected_glue = "0.2"

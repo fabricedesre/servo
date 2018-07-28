@@ -32,10 +32,11 @@
 use app_units::Au;
 use canvas_traits::canvas::{CanvasGradientStop, CanvasId, LinearGradientStyle, RadialGradientStyle};
 use canvas_traits::canvas::{CompositionOrBlending, LineCapStyle, LineJoinStyle, RepetitionStyle};
-use canvas_traits::webgl::{WebGLBufferId, WebGLFramebufferId, WebGLProgramId, WebGLRenderbufferId};
-use canvas_traits::webgl::{WebGLChan, WebGLContextShareMode, WebGLError, WebGLPipeline, WebGLMsgSender};
-use canvas_traits::webgl::{WebGLReceiver, WebGLSender, WebGLShaderId, WebGLTextureId, WebGLVertexArrayId};
-use canvas_traits::webgl::{WebGLSLVersion, WebGLVersion};
+use canvas_traits::webgl::{ActiveAttribInfo, ActiveUniformInfo, WebGLBufferId, WebGLChan};
+use canvas_traits::webgl::{WebGLContextShareMode, WebGLError, WebGLFramebufferId, WebGLMsgSender};
+use canvas_traits::webgl::{WebGLPipeline, WebGLProgramId, WebGLReceiver, WebGLRenderbufferId};
+use canvas_traits::webgl::{WebGLSLVersion, WebGLSender, WebGLShaderId, WebGLTextureId};
+use canvas_traits::webgl::{WebGLVersion, WebGLVertexArrayId};
 use cssparser::RGBA;
 use devtools_traits::{CSSError, TimelineMarkerType, WorkerId};
 use dom::abstractworker::SharedRt;
@@ -47,6 +48,7 @@ use dom::bindings::root::{Dom, DomRoot};
 use dom::bindings::str::{DOMString, USVString};
 use dom::bindings::utils::WindowProxyHandler;
 use dom::document::PendingRestyle;
+use dom::htmlimageelement::SourceSet;
 use encoding_rs::{Decoder, Encoding};
 use euclid::{Transform2D, Transform3D, Point2D, Vector2D, Rect, TypedSize2D, TypedScale};
 use euclid::Length as EuclidLength;
@@ -342,6 +344,8 @@ unsafe impl<A: JSTraceable, B: JSTraceable, C: JSTraceable> JSTraceable for (A, 
     }
 }
 
+unsafe_no_jsmanaged_fields!(ActiveAttribInfo);
+unsafe_no_jsmanaged_fields!(ActiveUniformInfo);
 unsafe_no_jsmanaged_fields!(bool, f32, f64, String, AtomicBool, AtomicUsize, Uuid, char);
 unsafe_no_jsmanaged_fields!(usize, u8, u16, u32, u64);
 unsafe_no_jsmanaged_fields!(isize, i8, i16, i32, i64);
@@ -424,6 +428,7 @@ unsafe_no_jsmanaged_fields!(ScriptToConstellationChan);
 unsafe_no_jsmanaged_fields!(InteractiveMetrics);
 unsafe_no_jsmanaged_fields!(InteractiveWindow);
 unsafe_no_jsmanaged_fields!(CanvasId);
+unsafe_no_jsmanaged_fields!(SourceSet);
 
 unsafe impl<'a> JSTraceable for &'a str {
     #[inline]

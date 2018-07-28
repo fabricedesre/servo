@@ -52,9 +52,11 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use task::TaskCanceller;
+use task_source::TaskSourceName;
 use task_source::file_reading::FileReadingTaskSource;
 use task_source::networking::NetworkingTaskSource;
 use task_source::performance_timeline::PerformanceTimelineTaskSource;
+use task_source::remote_event::RemoteEventTaskSource;
 use time::{Timespec, get_time};
 use timers::{IsInterval, OneshotTimerCallback, OneshotTimerHandle};
 use timers::{OneshotTimers, TimerCallback};
@@ -389,13 +391,25 @@ impl GlobalScope {
     }
 
     /// `ScriptChan` to send messages to the networking task source of
-    /// this of this global scope.
+    /// this global scope.
     pub fn networking_task_source(&self) -> NetworkingTaskSource {
         if let Some(window) = self.downcast::<Window>() {
             return window.networking_task_source();
         }
         if let Some(worker) = self.downcast::<WorkerGlobalScope>() {
             return worker.networking_task_source();
+        }
+        unreachable!();
+    }
+
+    /// `ScriptChan` to send messages to the remote-event task source of
+    /// this global scope.
+    pub fn remote_event_task_source(&self) -> RemoteEventTaskSource {
+        if let Some(window) = self.downcast::<Window>() {
+            return window.remote_event_task_source();
+        }
+        if let Some(worker) = self.downcast::<WorkerGlobalScope>() {
+            return worker.remote_event_task_source();
         }
         unreachable!();
     }
@@ -508,11 +522,14 @@ impl GlobalScope {
 
     /// Returns the task canceller of this global to ensure that everything is
     /// properly cancelled when the global scope is destroyed.
-    pub fn task_canceller(&self) -> TaskCanceller {
+    pub fn task_canceller(&self, name: TaskSourceName) -> TaskCanceller {
         if let Some(window) = self.downcast::<Window>() {
-            return window.task_canceller();
+            return window.task_canceller(name);
         }
         if let Some(worker) = self.downcast::<WorkerGlobalScope>() {
+            // Note: the "name" is not passed to the worker,
+            // because 'closing' it only requires one task canceller for all task sources.
+            // https://html.spec.whatwg.org/multipage/#dom-workerglobalscope-closing
             return worker.task_canceller();
         }
         unreachable!();

@@ -17,7 +17,7 @@ import os.path as path
 import platform
 import copy
 from collections import OrderedDict
-from time import time
+import time
 import json
 import urllib2
 import urllib
@@ -157,7 +157,7 @@ class MachCommands(CommandBase):
                 print("%s is not a valid test path or suite name" % arg)
                 return 1
 
-        test_start = time()
+        test_start = time.time()
         for suite, tests in selected_suites.iteritems():
             props = suites[suite]
             kwargs = props.get("kwargs", {})
@@ -166,7 +166,7 @@ class MachCommands(CommandBase):
 
             Registrar.dispatch("test-%s" % suite, context=self.context, **kwargs)
 
-        elapsed = time() - test_start
+        elapsed = time.time() - test_start
 
         print("Tests completed in %0.2fs" % elapsed)
 
@@ -319,7 +319,9 @@ class MachCommands(CommandBase):
         if self_test:
             return test_tidy.do_tests()
         else:
-            return tidy.scan(not all_files, not no_progress, stylo=stylo)
+            manifest_dirty = run_update(self.context.topdir, check_clean=True)
+            tidy_failed = tidy.scan(not all_files, not no_progress, stylo=stylo)
+            return tidy_failed or manifest_dirty
 
     @Command('test-webidl',
              description='Run the WebIDL parser tests',
@@ -365,10 +367,25 @@ class MachCommands(CommandBase):
         else:
             return ret
 
+    @Command('test-wpt-android',
+             description='Run the web platform test suite in an Android emulator',
+             category='testing',
+             parser=create_parser_wpt)
+    def test_wpt_android(self, release=False, dev=False, binary_args=None, **kwargs):
+        kwargs.update(
+            release=release,
+            dev=dev,
+            product="servodriver",
+            processes=1,
+            binary_args=self.in_android_emulator(release, dev) + (binary_args or []),
+            binary=sys.executable,
+        )
+        return self._test_wpt(**kwargs)
+
     def _test_wpt(self, **kwargs):
         hosts_file_path = path.join(self.context.topdir, 'tests', 'wpt', 'hosts')
         os.environ["hosts_file_path"] = hosts_file_path
-        run_file = path.abspath(path.join(self.context.topdir, "tests", "wpt", "run_wpt.py"))
+        run_file = path.abspath(path.join(self.context.topdir, "tests", "wpt", "run.py"))
         return self.wptrunner(run_file, **kwargs)
 
     # Helper to ensure all specified paths are handled, otherwise dispatch to appropriate test suite.
@@ -548,6 +565,53 @@ class MachCommands(CommandBase):
         if output is not sys.stdout:
             output.close()
         return 1
+
+    @Command('test-android-startup',
+             description='Extremely minimal testing of Servo for Android',
+             category='testing')
+    @CommandArgument('--release', '-r', action='store_true',
+                     help='Run the release build')
+    @CommandArgument('--dev', '-d', action='store_true',
+                     help='Run the dev build')
+    def test_android_startup(self, release, dev):
+        html = """
+            <script>
+                console.log("JavaScript is running!")
+            </script>
+        """
+        url = "data:text/html;base64," + html.encode("base64").replace("\n", "")
+        args = self.in_android_emulator(release, dev)
+        args = [sys.executable] + args + [url]
+        process = subprocess.Popen(args, stdout=subprocess.PIPE)
+        try:
+            while 1:
+                line = process.stdout.readline()
+                if len(line) == 0:
+                    print("EOF without finding the expected line")
+                    return 1
+                print(line.rstrip())
+                if "JavaScript is running!" in line:
+                    break
+        finally:
+            process.terminate()
+
+    def in_android_emulator(self, release, dev):
+        if (release and dev) or not (release or dev):
+            print("Please specify one of --dev or --release.")
+            sys.exit(1)
+
+        avd = "servo-x86"
+        target = "i686-linux-android"
+        print("Assuming --target " + target)
+
+        env = self.build_env(target=target)
+        os.environ["PATH"] = env["PATH"]
+        assert self.handle_android_target(target)
+        binary_path = self.get_binary_path(release, dev, android=True)
+        apk = binary_path + ".apk"
+
+        py = path.join(self.context.topdir, "etc", "run_in_headless_android_emulator.py")
+        return [py, avd, apk]
 
     @Command('test-jquery',
              description='Run the jQuery test suite',

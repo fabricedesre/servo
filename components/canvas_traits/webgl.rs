@@ -6,6 +6,7 @@ use euclid::Size2D;
 use gleam::gl;
 use offscreen_gl_context::{GLContextAttributes, GLLimits};
 use serde_bytes::ByteBuf;
+use std::borrow::Cow;
 use std::num::NonZeroU32;
 use webrender_api::{DocumentId, ImageKey, PipelineId};
 
@@ -207,11 +208,7 @@ pub enum WebGLCommand {
     FramebufferTexture2D(u32, u32, u32, Option<WebGLTextureId>, i32),
     GetExtensions(WebGLSender<String>),
     GetShaderPrecisionFormat(u32, u32, WebGLSender<(i32, i32, i32)>),
-    GetActiveAttrib(WebGLProgramId, u32, WebGLSender<WebGLResult<(i32, u32, String)>>),
-    GetActiveUniform(WebGLProgramId, u32, WebGLSender<WebGLResult<(i32, u32, String)>>),
-    GetAttribLocation(WebGLProgramId, String, WebGLSender<Option<i32>>),
-    GetUniformLocation(WebGLProgramId, String, WebGLSender<Option<i32>>),
-    GetVertexAttribOffset(u32, u32, WebGLSender<isize>),
+    GetUniformLocation(WebGLProgramId, String, WebGLSender<i32>),
     GetShaderInfoLog(WebGLShaderId, WebGLSender<String>),
     GetProgramInfoLog(WebGLProgramId, WebGLSender<String>),
     GetFramebufferAttachmentParameter(u32, u32, u32, WebGLSender<i32>),
@@ -228,10 +225,9 @@ pub enum WebGLCommand {
     StencilOp(u32, u32, u32),
     StencilOpSeparate(u32, u32, u32, u32),
     Hint(u32, u32),
-    IsEnabled(u32, WebGLSender<bool>),
     LineWidth(f32),
     PixelStorei(u32, i32),
-    LinkProgram(WebGLProgramId),
+    LinkProgram(WebGLProgramId, WebGLSender<ProgramLinkInfo>),
     Uniform1f(i32, f32),
     Uniform1fv(i32, Vec<f32>),
     Uniform1i(i32, i32),
@@ -248,10 +244,10 @@ pub enum WebGLCommand {
     Uniform4fv(i32, Vec<f32>),
     Uniform4i(i32, i32, i32, i32, i32),
     Uniform4iv(i32, Vec<i32>),
-    UniformMatrix2fv(i32, bool, Vec<f32>),
-    UniformMatrix3fv(i32, bool, Vec<f32>),
-    UniformMatrix4fv(i32, bool, Vec<f32>),
-    UseProgram(WebGLProgramId),
+    UniformMatrix2fv(i32, Vec<f32>),
+    UniformMatrix3fv(i32, Vec<f32>),
+    UniformMatrix4fv(i32, Vec<f32>),
+    UseProgram(Option<WebGLProgramId>),
     ValidateProgram(WebGLProgramId),
     VertexAttrib(u32, f32, f32, f32, f32),
     VertexAttribPointer(u32, i32, u32, bool, i32, u32),
@@ -270,21 +266,37 @@ pub enum WebGLCommand {
     GetParameterBool(ParameterBool, WebGLSender<bool>),
     GetParameterBool4(ParameterBool4, WebGLSender<[bool; 4]>),
     GetParameterInt(ParameterInt, WebGLSender<i32>),
+    GetParameterInt2(ParameterInt2, WebGLSender<[i32; 2]>),
     GetParameterInt4(ParameterInt4, WebGLSender<[i32; 4]>),
     GetParameterFloat(ParameterFloat, WebGLSender<f32>),
     GetParameterFloat2(ParameterFloat2, WebGLSender<[f32; 2]>),
     GetParameterFloat4(ParameterFloat4, WebGLSender<[f32; 4]>),
-    GetProgramParameterBool(WebGLProgramId, ProgramParameterBool, WebGLSender<bool>),
-    GetProgramParameterInt(WebGLProgramId, ProgramParameterInt, WebGLSender<i32>),
+    GetProgramValidateStatus(WebGLProgramId, WebGLSender<bool>),
+    GetProgramActiveUniforms(WebGLProgramId, WebGLSender<i32>),
     GetShaderParameterBool(WebGLShaderId, ShaderParameterBool, WebGLSender<bool>),
     GetShaderParameterInt(WebGLShaderId, ShaderParameterInt, WebGLSender<i32>),
-    GetVertexAttribBool(u32, VertexAttribBool, WebGLSender<WebGLResult<bool>>),
-    GetVertexAttribInt(u32, VertexAttribInt, WebGLSender<WebGLResult<i32>>),
-    GetVertexAttribFloat4(u32, VertexAttribFloat4, WebGLSender<WebGLResult<[f32; 4]>>),
+    GetCurrentVertexAttrib(u32, WebGLSender<[f32; 4]>),
     GetTexParameterFloat(u32, TexParameterFloat, WebGLSender<f32>),
     GetTexParameterInt(u32, TexParameterInt, WebGLSender<i32>),
     TexParameteri(u32, TexParameterInt, i32),
     TexParameterf(u32, TexParameterFloat, f32),
+    DrawArraysInstanced { mode: u32, first: i32, count: i32, primcount: i32 },
+    DrawElementsInstanced { mode: u32, count: i32, type_: u32, offset: u32, primcount: i32 },
+    VertexAttribDivisor { index: u32, divisor: u32 },
+    GetUniformBool(WebGLProgramId, i32, WebGLSender<bool>),
+    GetUniformBool2(WebGLProgramId, i32, WebGLSender<[bool; 2]>),
+    GetUniformBool3(WebGLProgramId, i32, WebGLSender<[bool; 3]>),
+    GetUniformBool4(WebGLProgramId, i32, WebGLSender<[bool; 4]>),
+    GetUniformInt(WebGLProgramId, i32, WebGLSender<i32>),
+    GetUniformInt2(WebGLProgramId, i32, WebGLSender<[i32; 2]>),
+    GetUniformInt3(WebGLProgramId, i32, WebGLSender<[i32; 3]>),
+    GetUniformInt4(WebGLProgramId, i32, WebGLSender<[i32; 4]>),
+    GetUniformFloat(WebGLProgramId, i32, WebGLSender<f32>),
+    GetUniformFloat2(WebGLProgramId, i32, WebGLSender<[f32; 2]>),
+    GetUniformFloat3(WebGLProgramId, i32, WebGLSender<[f32; 3]>),
+    GetUniformFloat4(WebGLProgramId, i32, WebGLSender<[f32; 4]>),
+    GetUniformFloat9(WebGLProgramId, i32, WebGLSender<[f32; 9]>),
+    GetUniformFloat16(WebGLProgramId, i32, WebGLSender<[f32; 16]>),
 }
 
 macro_rules! define_resource_id_struct {
@@ -418,6 +430,53 @@ pub enum DOMToTextureCommand {
     Lock(PipelineId, usize, WebGLSender<Option<(u32, Size2D<i32>)>>),
 }
 
+/// Information about a WebGL program linking operation.
+#[derive(Clone, Deserialize, Serialize)]
+pub struct ProgramLinkInfo {
+    /// Whether the program was linked successfully.
+    pub linked: bool,
+    /// The list of active attributes.
+    pub active_attribs: Box<[ActiveAttribInfo]>,
+    /// The list of active uniforms.
+    pub active_uniforms: Box<[ActiveUniformInfo]>,
+}
+
+/// Description of a single active attribute.
+#[derive(Clone, Deserialize, MallocSizeOf, Serialize)]
+pub struct ActiveAttribInfo {
+    /// The name of the attribute.
+    pub name: String,
+    /// The size of the attribute.
+    pub size: i32,
+    /// The type of the attribute.
+    pub type_: u32,
+    /// The location of the attribute.
+    pub location: i32,
+}
+
+/// Description of a single active uniform.
+#[derive(Clone, Deserialize, MallocSizeOf, Serialize)]
+pub struct ActiveUniformInfo {
+    /// The base name of the uniform.
+    pub base_name: Box<str>,
+    /// The size of the uniform, if it is an array.
+    pub size: Option<i32>,
+    /// The type of the uniform.
+    pub type_: u32,
+}
+
+impl ActiveUniformInfo {
+    pub fn name(&self) -> Cow<str> {
+        if self.size.is_some() {
+            let mut name = String::from(&*self.base_name);
+            name.push_str("[0]");
+            Cow::Owned(name)
+        } else {
+            Cow::Borrowed(&self.base_name)
+        }
+    }
+}
+
 macro_rules! parameters {
     ($name:ident { $(
         $variant:ident($kind:ident { $(
@@ -451,15 +510,8 @@ macro_rules! parameters {
 parameters! {
     Parameter {
         Bool(ParameterBool {
-            Blend = gl::BLEND,
-            CullFace = gl::CULL_FACE,
-            DepthTest = gl::DEPTH_TEST,
             DepthWritemask = gl::DEPTH_WRITEMASK,
-            Dither = gl::DITHER,
-            PolygonOffsetFill = gl::POLYGON_OFFSET_FILL,
             SampleCoverageInvert = gl::SAMPLE_COVERAGE_INVERT,
-            ScissorTest = gl::SCISSOR_TEST,
-            StencilTest = gl::STENCIL_TEST,
         }),
         Bool4(ParameterBool4 {
             ColorWritemask = gl::COLOR_WRITEMASK,
@@ -504,6 +556,9 @@ parameters! {
             SubpixelBits = gl::SUBPIXEL_BITS,
             UnpackAlignment = gl::UNPACK_ALIGNMENT,
         }),
+        Int2(ParameterInt2 {
+            MaxViewportDims = gl::MAX_VIEWPORT_DIMS,
+        }),
         Int4(ParameterInt4 {
             ScissorBox = gl::SCISSOR_BOX,
             Viewport = gl::VIEWPORT,
@@ -524,21 +579,6 @@ parameters! {
         Float4(ParameterFloat4 {
             BlendColor = gl::BLEND_COLOR,
             ColorClearValue = gl::COLOR_CLEAR_VALUE,
-        }),
-    }
-}
-
-parameters! {
-    ProgramParameter {
-        Bool(ProgramParameterBool {
-            DeleteStatus = gl::DELETE_STATUS,
-            LinkStatus = gl::LINK_STATUS,
-            ValidateStatus = gl::VALIDATE_STATUS,
-        }),
-        Int(ProgramParameterInt {
-            AttachedShaders = gl::ATTACHED_SHADERS,
-            ActiveAttributes = gl::ACTIVE_ATTRIBUTES,
-            ActiveUniforms = gl::ACTIVE_UNIFORMS,
         }),
     }
 }
@@ -565,23 +605,6 @@ parameters! {
             TextureMinFilter = gl::TEXTURE_MIN_FILTER,
             TextureWrapS = gl::TEXTURE_WRAP_S,
             TextureWrapT = gl::TEXTURE_WRAP_T,
-        }),
-    }
-}
-
-parameters! {
-    VertexAttrib {
-        Bool(VertexAttribBool {
-            VertexAttribArrayEnabled = gl::VERTEX_ATTRIB_ARRAY_ENABLED,
-            VertexAttribArrayNormalized = gl::VERTEX_ATTRIB_ARRAY_NORMALIZED,
-        }),
-        Int(VertexAttribInt {
-            VertexAttribArraySize = gl::VERTEX_ATTRIB_ARRAY_SIZE,
-            VertexAttribArrayStride = gl::VERTEX_ATTRIB_ARRAY_STRIDE,
-            VertexAttribArrayType = gl::VERTEX_ATTRIB_ARRAY_TYPE,
-        }),
-        Float4(VertexAttribFloat4 {
-            CurrentVertexAttrib = gl::CURRENT_VERTEX_ATTRIB,
         }),
     }
 }

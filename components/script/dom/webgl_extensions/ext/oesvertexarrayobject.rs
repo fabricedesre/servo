@@ -13,7 +13,6 @@ use dom_struct::dom_struct;
 use js::conversions::ToJSValConvertible;
 use js::jsapi::JSContext;
 use js::jsval::{JSVal, NullValue};
-use std::iter;
 use super::{WebGLExtension, WebGLExtensions, WebGLExtensionSpec};
 
 #[dom_struct]
@@ -49,9 +48,7 @@ impl OESVertexArrayObjectMethods for OESVertexArrayObject {
     fn CreateVertexArrayOES(&self) -> Option<DomRoot<WebGLVertexArrayObjectOES>> {
         let (sender, receiver) = webgl_channel().unwrap();
         self.ctx.send_command(WebGLCommand::CreateVertexArray(sender));
-
-        let result = receiver.recv().unwrap();
-        result.map(|vao_id| WebGLVertexArrayObjectOES::new(&self.global(), vao_id))
+        receiver.recv().unwrap().map(|id| WebGLVertexArrayObjectOES::new(&self.ctx, id))
     }
 
     // https://www.khronos.org/registry/webgl/extensions/OES_vertex_array_object/
@@ -70,9 +67,10 @@ impl OESVertexArrayObjectMethods for OESVertexArrayObject {
             }
 
             // Remove VAO references from buffers
-            let buffers = vao.bound_attrib_buffers();
-            for buffer in buffers {
-                buffer.remove_vao_reference(vao.id());
+            for attrib_data in &*vao.vertex_attribs().borrow() {
+                if let Some(buffer) = attrib_data.buffer() {
+                    buffer.remove_vao_reference(vao.id());
+                }
             }
             if let Some(buffer) = vao.bound_buffer_element_array() {
                 buffer.remove_vao_reference(vao.id());
@@ -94,11 +92,12 @@ impl OESVertexArrayObjectMethods for OESVertexArrayObject {
     fn BindVertexArrayOES(&self, vao: Option<&WebGLVertexArrayObjectOES>) {
         if let Some(bound_vao) = self.bound_vao.get() {
             // Store buffers attached to attrib pointers
-            let buffers = self.ctx.borrow_bound_attrib_buffers();
-            bound_vao.set_bound_attrib_buffers(buffers.iter().map(|(key, buffer)| {
-                (*buffer).add_vao_reference(bound_vao.id());
-                (*key, &**buffer)
-            }));
+            bound_vao.vertex_attribs().clone_from(&self.ctx.vertex_attribs());
+            for attrib_data in &*bound_vao.vertex_attribs().borrow() {
+                if let Some(buffer) = attrib_data.buffer() {
+                    buffer.add_vao_reference(bound_vao.id());
+                }
+            }
             // Store element array buffer
             let element_array = self.ctx.bound_buffer_element_array();
             bound_vao.set_bound_buffer_element_array(element_array.as_ref().map(|buffer| {
@@ -118,14 +117,13 @@ impl OESVertexArrayObjectMethods for OESVertexArrayObject {
             self.bound_vao.set(Some(&vao));
 
             // Restore WebGLRenderingContext current bindings
-            let buffers = vao.borrow_bound_attrib_buffers();
-            self.ctx.set_bound_attrib_buffers(buffers.iter().map(|(k, v)| (*k, &**v)));
+            self.ctx.vertex_attribs().clone_from(&vao.vertex_attribs());
             let element_array = vao.bound_buffer_element_array();
             self.ctx.set_bound_buffer_element_array(element_array.as_ref().map(|buffer| &**buffer));
         } else {
             self.ctx.send_command(WebGLCommand::BindVertexArray(None));
             self.bound_vao.set(None);
-            self.ctx.set_bound_attrib_buffers(iter::empty());
+            self.ctx.vertex_attribs().clear();
         }
     }
 }

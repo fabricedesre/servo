@@ -3,20 +3,23 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // https://www.khronos.org/registry/webgl/specs/latest/1.0/webgl.idl
-use canvas_traits::webgl::{WebGLCommand, WebGLError, WebGLMsgSender, WebGLProgramId, WebGLResult};
-use canvas_traits::webgl::webgl_channel;
+use canvas_traits::webgl::{ActiveAttribInfo, ActiveUniformInfo, WebGLCommand, WebGLError};
+use canvas_traits::webgl::{WebGLProgramId, WebGLResult, webgl_channel};
+use dom::bindings::cell::DomRefCell;
 use dom::bindings::codegen::Bindings::WebGLProgramBinding;
 use dom::bindings::codegen::Bindings::WebGLRenderingContextBinding::WebGLRenderingContextConstants as constants;
+use dom::bindings::inheritance::Castable;
 use dom::bindings::reflector::{DomObject, reflect_dom_object};
 use dom::bindings::root::{DomRoot, MutNullableDom};
 use dom::bindings::str::DOMString;
 use dom::webglactiveinfo::WebGLActiveInfo;
 use dom::webglobject::WebGLObject;
-use dom::webglrenderingcontext::MAX_UNIFORM_AND_ATTRIBUTE_LEN;
+use dom::webglrenderingcontext::{MAX_UNIFORM_AND_ATTRIBUTE_LEN, WebGLRenderingContext};
 use dom::webglshader::WebGLShader;
-use dom::window::Window;
+use dom::webgluniformlocation::WebGLUniformLocation;
 use dom_struct::dom_struct;
-use std::cell::Cell;
+use fnv::FnvHashSet;
+use std::cell::{Cell, Ref};
 
 #[dom_struct]
 pub struct WebGLProgram {
@@ -25,84 +28,41 @@ pub struct WebGLProgram {
     is_deleted: Cell<bool>,
     link_called: Cell<bool>,
     linked: Cell<bool>,
+    link_generation: Cell<u64>,
     fragment_shader: MutNullableDom<WebGLShader>,
     vertex_shader: MutNullableDom<WebGLShader>,
-    #[ignore_malloc_size_of = "Defined in ipc-channel"]
-    renderer: WebGLMsgSender,
-}
-
-/// ANGLE adds a `_u` prefix to variable names:
-///
-/// https://chromium.googlesource.com/angle/angle/+/855d964bd0d05f6b2cb303f625506cf53d37e94f
-///
-/// To avoid hard-coding this we would need to use the `sh::GetAttributes` and `sh::GetUniforms`
-/// API to look up the `x.name` and `x.mappedName` members,
-/// then build a data structure for bi-directional lookup (so either linear scan or two hashmaps).
-/// Even then, this would probably only support plain variable names like "foo".
-/// Strings passed to e.g. `GetUniformLocation` can be expressions like "foo[0].bar",
-/// with the mapping for that "bar" name in yet another part of ANGLE’s API.
-const ANGLE_NAME_PREFIX: &'static str = "_u";
-
-fn to_name_in_compiled_shader(s: &str) -> String {
-    map_dot_separated(s, |s, mapped| {
-        mapped.push_str(ANGLE_NAME_PREFIX);
-        mapped.push_str(s);
-    })
-}
-
-fn from_name_in_compiled_shader(s: &str) -> String {
-    map_dot_separated(s, |s, mapped| {
-        mapped.push_str(if s.starts_with(ANGLE_NAME_PREFIX) {
-            &s[ANGLE_NAME_PREFIX.len()..]
-        } else {
-            s
-        })
-    })
-}
-
-fn map_dot_separated<F: Fn(&str, &mut String)>(s: &str, f: F) -> String {
-    let mut iter = s.split('.');
-    let mut mapped = String::new();
-    f(iter.next().unwrap(), &mut mapped);
-    for s in iter {
-        mapped.push('.');
-        f(s, &mut mapped);
-    }
-    mapped
+    active_attribs: DomRefCell<Box<[ActiveAttribInfo]>>,
+    active_uniforms: DomRefCell<Box<[ActiveUniformInfo]>>,
 }
 
 impl WebGLProgram {
-    fn new_inherited(renderer: WebGLMsgSender,
-                     id: WebGLProgramId)
-                     -> WebGLProgram {
-        WebGLProgram {
-            webgl_object: WebGLObject::new_inherited(),
+    fn new_inherited(context: &WebGLRenderingContext, id: WebGLProgramId) -> Self {
+        Self {
+            webgl_object: WebGLObject::new_inherited(context),
             id: id,
             is_deleted: Cell::new(false),
             link_called: Cell::new(false),
             linked: Cell::new(false),
+            link_generation: Default::default(),
             fragment_shader: Default::default(),
             vertex_shader: Default::default(),
-            renderer: renderer,
+            active_attribs: DomRefCell::new(vec![].into()),
+            active_uniforms: DomRefCell::new(vec![].into()),
         }
     }
 
-    pub fn maybe_new(window: &Window, renderer: WebGLMsgSender)
-                     -> Option<DomRoot<WebGLProgram>> {
+    pub fn maybe_new(context: &WebGLRenderingContext) -> Option<DomRoot<Self>> {
         let (sender, receiver) = webgl_channel().unwrap();
-        renderer.send(WebGLCommand::CreateProgram(sender)).unwrap();
-
-        let result = receiver.recv().unwrap();
-        result.map(|program_id| WebGLProgram::new(window, renderer, program_id))
+        context.send_command(WebGLCommand::CreateProgram(sender));
+        receiver.recv().unwrap().map(|id| WebGLProgram::new(context, id))
     }
 
-    pub fn new(window: &Window,
-               renderer: WebGLMsgSender,
-               id: WebGLProgramId)
-               -> DomRoot<WebGLProgram> {
-        reflect_dom_object(Box::new(WebGLProgram::new_inherited(renderer, id)),
-                           window,
-                           WebGLProgramBinding::Wrap)
+    pub fn new(context: &WebGLRenderingContext, id: WebGLProgramId) -> DomRoot<Self> {
+        reflect_dom_object(
+            Box::new(WebGLProgram::new_inherited(context, id)),
+            &*context.global(),
+            WebGLProgramBinding::Wrap,
+        )
     }
 }
 
@@ -116,7 +76,9 @@ impl WebGLProgram {
     pub fn delete(&self) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
-            let _ = self.renderer.send(WebGLCommand::DeleteProgram(self.id));
+            self.upcast::<WebGLObject>()
+                .context()
+                .send_command(WebGLCommand::DeleteProgram(self.id));
 
             if let Some(shader) = self.fragment_shader.get() {
                 shader.decrement_attached_counter();
@@ -142,7 +104,9 @@ impl WebGLProgram {
             return Err(WebGLError::InvalidOperation);
         }
         self.linked.set(false);
-        self.link_called.set(true);
+        self.link_generation.set(self.link_generation.get().checked_add(1).unwrap());
+        *self.active_attribs.borrow_mut() = Box::new([]);
+        *self.active_uniforms.borrow_mut() = Box::new([]);
 
         match self.fragment_shader.get() {
             Some(ref shader) if shader.successfully_compiled() => {},
@@ -154,22 +118,53 @@ impl WebGLProgram {
             _ => return Ok(()), // callers use gl.LINK_STATUS to check link errors
         }
 
-        self.linked.set(true);
-        self.renderer.send(WebGLCommand::LinkProgram(self.id)).unwrap();
+        let (sender, receiver) = webgl_channel().unwrap();
+        self.upcast::<WebGLObject>()
+            .context()
+            .send_command(WebGLCommand::LinkProgram(self.id, sender));
+        let link_info = receiver.recv().unwrap();
+
+        {
+            let mut used_locs = FnvHashSet::default();
+            let mut used_names = FnvHashSet::default();
+            for active_attrib in &*link_info.active_attribs {
+                if active_attrib.location == -1 {
+                    continue;
+                }
+                let columns = match active_attrib.type_ {
+                    constants::FLOAT_MAT2 => 2,
+                    constants::FLOAT_MAT3 => 3,
+                    constants::FLOAT_MAT4 => 4,
+                    _ => 1,
+                };
+                assert!(used_names.insert(&*active_attrib.name));
+                for column in 0..columns {
+                    // https://www.khronos.org/registry/webgl/specs/latest/1.0/#6.31
+                    if !used_locs.insert(active_attrib.location as u32 + column) {
+                        return Ok(());
+                    }
+                }
+            }
+            for active_uniform in &*link_info.active_uniforms {
+                // https://www.khronos.org/registry/webgl/specs/latest/1.0/#6.41
+                if !used_names.insert(&*active_uniform.base_name) {
+                    return Ok(());
+                }
+            }
+        }
+
+        self.linked.set(link_info.linked);
+        *self.active_attribs.borrow_mut() = link_info.active_attribs;
+        *self.active_uniforms.borrow_mut() = link_info.active_uniforms;
         Ok(())
     }
 
-    /// glUseProgram
-    pub fn use_program(&self) -> WebGLResult<()> {
-        if self.is_deleted() {
-            return Err(WebGLError::InvalidOperation);
-        }
-        if !self.linked.get() {
-            return Err(WebGLError::InvalidOperation);
-        }
+    pub fn active_attribs(&self) -> Ref<[ActiveAttribInfo]> {
+        Ref::map(self.active_attribs.borrow(), |attribs| &**attribs)
+    }
 
-        self.renderer.send(WebGLCommand::UseProgram(self.id)).unwrap();
-        Ok(())
+    pub fn active_uniforms(&self) -> Ref<[ActiveUniformInfo]> {
+        Ref::map(self.active_uniforms.borrow(), |uniforms| &**uniforms)
     }
 
     /// glValidateProgram
@@ -177,7 +172,9 @@ impl WebGLProgram {
         if self.is_deleted() {
             return Err(WebGLError::InvalidOperation);
         }
-        self.renderer.send(WebGLCommand::ValidateProgram(self.id)).unwrap();
+        self.upcast::<WebGLObject>()
+            .context()
+            .send_command(WebGLCommand::ValidateProgram(self.id));
         Ok(())
     }
 
@@ -204,7 +201,9 @@ impl WebGLProgram {
         shader_slot.set(Some(shader));
         shader.increment_attached_counter();
 
-        self.renderer.send(WebGLCommand::AttachShader(self.id, shader.id())).unwrap();
+        self.upcast::<WebGLObject>()
+            .context()
+            .send_command(WebGLCommand::AttachShader(self.id, shader.id()));
 
         Ok(())
     }
@@ -234,7 +233,9 @@ impl WebGLProgram {
         shader_slot.set(None);
         shader.decrement_attached_counter();
 
-        self.renderer.send(WebGLCommand::DetachShader(self.id, shader.id())).unwrap();
+        self.upcast::<WebGLObject>()
+            .context()
+            .send_command(WebGLCommand::DetachShader(self.id, shader.id()));
 
         Ok(())
     }
@@ -253,11 +254,9 @@ impl WebGLProgram {
             return Err(WebGLError::InvalidOperation);
         }
 
-        let name = to_name_in_compiled_shader(&name);
-
-        self.renderer
-            .send(WebGLCommand::BindAttribLocation(self.id, index, name))
-            .unwrap();
+        self.upcast::<WebGLObject>()
+            .context()
+            .send_command(WebGLCommand::BindAttribLocation(self.id, index, name.into()));
         Ok(())
     }
 
@@ -265,15 +264,14 @@ impl WebGLProgram {
         if self.is_deleted() {
             return Err(WebGLError::InvalidValue);
         }
-        let (sender, receiver) = webgl_channel().unwrap();
-        self.renderer
-            .send(WebGLCommand::GetActiveUniform(self.id, index, sender))
-            .unwrap();
-
-        receiver.recv().unwrap().map(|(size, ty, name)| {
-            let name = DOMString::from(from_name_in_compiled_shader(&name));
-            WebGLActiveInfo::new(self.global().as_window(), size, ty, name)
-        })
+        let uniforms = self.active_uniforms.borrow();
+        let data = uniforms.get(index as usize).ok_or(WebGLError::InvalidValue)?;
+        Ok(WebGLActiveInfo::new(
+            self.global().as_window(),
+            data.size.unwrap_or(1),
+            data.type_,
+            data.name().into(),
+        ))
     }
 
     /// glGetActiveAttrib
@@ -281,19 +279,48 @@ impl WebGLProgram {
         if self.is_deleted() {
             return Err(WebGLError::InvalidValue);
         }
-        let (sender, receiver) = webgl_channel().unwrap();
-        self.renderer
-            .send(WebGLCommand::GetActiveAttrib(self.id, index, sender))
-            .unwrap();
-
-        receiver.recv().unwrap().map(|(size, ty, name)| {
-            let name = DOMString::from(from_name_in_compiled_shader(&name));
-            WebGLActiveInfo::new(self.global().as_window(), size, ty, name)
-        })
+        let attribs = self.active_attribs.borrow();
+        let data = attribs.get(index as usize).ok_or(WebGLError::InvalidValue)?;
+        Ok(WebGLActiveInfo::new(
+            self.global().as_window(),
+            data.size,
+            data.type_,
+            data.name.clone().into(),
+        ))
     }
 
     /// glGetAttribLocation
-    pub fn get_attrib_location(&self, name: DOMString) -> WebGLResult<Option<i32>> {
+    pub fn get_attrib_location(&self, name: DOMString) -> WebGLResult<i32> {
+        if !self.is_linked() || self.is_deleted() {
+            return Err(WebGLError::InvalidOperation);
+        }
+        if name.len() > MAX_UNIFORM_AND_ATTRIBUTE_LEN {
+            return Err(WebGLError::InvalidValue);
+        }
+
+        // Check if the name is reserved
+        if name.starts_with("gl_") {
+            return Ok(-1);
+        }
+
+        // https://www.khronos.org/registry/webgl/specs/latest/1.0/#GLSL_CONSTRUCTS
+        if name.starts_with("webgl_") || name.starts_with("_webgl_") {
+            return Ok(-1);
+        }
+
+        let location = self.active_attribs
+            .borrow()
+            .iter()
+            .find(|attrib| attrib.name == &*name)
+            .map_or(-1, |attrib| attrib.location);
+        Ok(location)
+    }
+
+    /// glGetUniformLocation
+    pub fn get_uniform_location(
+        &self,
+        name: DOMString,
+    ) -> WebGLResult<Option<DomRoot<WebGLUniformLocation>>> {
         if !self.is_linked() || self.is_deleted() {
             return Err(WebGLError::InvalidOperation);
         }
@@ -311,36 +338,35 @@ impl WebGLProgram {
             return Ok(None);
         }
 
-        let name = to_name_in_compiled_shader(&name);
+        let (size, type_) = {
+            let (base_name, array_index) = match parse_uniform_name(&name) {
+                Some((name, index)) if index.map_or(true, |i| i >= 0) => (name, index),
+                _ => return Ok(None),
+            };
+
+            let uniforms = self.active_uniforms.borrow();
+            match uniforms.iter().find(|attrib| &*attrib.base_name == base_name) {
+                Some(uniform) if array_index.is_none() || array_index < uniform.size => {
+                    (uniform.size.map(|size| size - array_index.unwrap_or_default()), uniform.type_)
+                },
+                _ => return Ok(None),
+            }
+        };
 
         let (sender, receiver) = webgl_channel().unwrap();
-        self.renderer
-            .send(WebGLCommand::GetAttribLocation(self.id, name, sender))
-            .unwrap();
-        Ok(receiver.recv().unwrap())
-    }
+        self.upcast::<WebGLObject>()
+            .context()
+            .send_command(WebGLCommand::GetUniformLocation(self.id, name.into(), sender));
+        let location = receiver.recv().unwrap();
 
-    /// glGetUniformLocation
-    pub fn get_uniform_location(&self, name: DOMString) -> WebGLResult<Option<i32>> {
-        if !self.is_linked() || self.is_deleted() {
-            return Err(WebGLError::InvalidOperation);
-        }
-        if name.len() > MAX_UNIFORM_AND_ATTRIBUTE_LEN {
-            return Err(WebGLError::InvalidValue);
-        }
-
-        // Check if the name is reserved
-        if name.starts_with("webgl") || name.starts_with("_webgl_") {
-            return Ok(None);
-        }
-
-        let name = to_name_in_compiled_shader(&name);
-
-        let (sender, receiver) = webgl_channel().unwrap();
-        self.renderer
-            .send(WebGLCommand::GetUniformLocation(self.id, name, sender))
-            .unwrap();
-        Ok(receiver.recv().unwrap())
+        Ok(Some(WebGLUniformLocation::new(
+            self.global().as_window(),
+            location,
+            self.id,
+            self.link_generation.get(),
+            size,
+            type_,
+        )))
     }
 
     /// glGetProgramInfoLog
@@ -358,7 +384,9 @@ impl WebGLProgram {
             }
         }
         let (sender, receiver) = webgl_channel().unwrap();
-        self.renderer.send(WebGLCommand::GetProgramInfoLog(self.id, sender)).unwrap();
+        self.upcast::<WebGLObject>()
+            .context()
+            .send_command(WebGLCommand::GetProgramInfoLog(self.id, sender));
         Ok(receiver.recv().unwrap())
     }
 
@@ -374,10 +402,24 @@ impl WebGLProgram {
             (None, None) => vec![]
         })
     }
+
+    pub fn link_generation(&self) -> u64 {
+        self.link_generation.get()
+    }
 }
 
 impl Drop for WebGLProgram {
     fn drop(&mut self) {
         self.delete();
     }
+}
+
+
+fn parse_uniform_name(name: &str) -> Option<(&str, Option<i32>)> {
+    if !name.ends_with(']') {
+        return Some((name, None));
+    }
+    let bracket_pos = name[..name.len() - 1].rfind('[')?;
+    let index = name[(bracket_pos + 1)..(name.len() - 1)].parse::<i32>().ok()?;
+    Some((&name[..bracket_pos], Some(index)))
 }

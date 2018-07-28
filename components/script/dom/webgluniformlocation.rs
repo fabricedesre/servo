@@ -15,26 +15,42 @@ pub struct WebGLUniformLocation {
     reflector_: Reflector,
     id: i32,
     program_id: WebGLProgramId,
+    link_generation: u64,
+    size: Option<i32>,
+    type_: u32,
 }
 
 impl WebGLUniformLocation {
-    fn new_inherited(id: i32,
-                     program_id: WebGLProgramId)
-                     -> WebGLUniformLocation {
-        WebGLUniformLocation {
+    fn new_inherited(
+        id: i32,
+        program_id: WebGLProgramId,
+        link_generation: u64,
+        size: Option<i32>,
+        type_: u32,
+    ) -> Self {
+        Self {
             reflector_: Reflector::new(),
-            id: id,
-            program_id: program_id,
+            id,
+            program_id,
+            link_generation,
+            size,
+            type_,
         }
     }
 
-    pub fn new(window: &Window,
-               id: i32,
-               program_id: WebGLProgramId)
-               -> DomRoot<WebGLUniformLocation> {
-        reflect_dom_object(Box::new(WebGLUniformLocation::new_inherited(id, program_id)),
-                           window,
-                           WebGLUniformLocationBinding::Wrap)
+    pub fn new(
+        window: &Window,
+        id: i32,
+        program_id: WebGLProgramId,
+        link_generation: u64,
+        size: Option<i32>,
+        type_: u32,
+    ) -> DomRoot<Self> {
+        reflect_dom_object(
+            Box::new(Self::new_inherited(id, program_id, link_generation, size, type_)),
+            window,
+            WebGLUniformLocationBinding::Wrap,
+        )
     }
 
     pub fn id(&self) -> i32 {
@@ -43,5 +59,17 @@ impl WebGLUniformLocation {
 
     pub fn program_id(&self) -> WebGLProgramId {
         self.program_id
+    }
+
+    pub fn link_generation(&self) -> u64 {
+        self.link_generation
+    }
+
+    pub fn size(&self) -> Option<i32> {
+        self.size
+    }
+
+    pub fn type_(&self) -> u32 {
+        self.type_
     }
 }

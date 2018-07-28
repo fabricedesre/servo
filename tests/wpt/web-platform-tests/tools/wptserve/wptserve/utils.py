@@ -2,7 +2,7 @@ import socket
 
 def invert_dict(dict):
     rv = {}
-    for key, values in dict.iteritems():
+    for key, values in dict.items():
         for value in values:
             if value in rv:
                 raise ValueError
@@ -98,7 +98,7 @@ def is_bad_port(port):
         6697,  # irc+tls
     ]
 
-def get_port(host):
+def get_port(host=''):
     port = 0
     while True:
         free_socket = _open_socket(host, 0)

@@ -744,7 +744,7 @@ def getJSToNativeConversionInfo(type, descriptorProvider, failureCode=None,
             if defaultValue:
                 assert isinstance(defaultValue, IDLNullValue)
                 dictionary, = dictionaries
-                default = "%s::%s(%s::%s::empty(cx))" % (
+                default = "%s::%s(%s::%s::empty())" % (
                     union_native_type(type),
                     dictionary.name,
                     CGDictionary.makeModuleName(dictionary.inner),
@@ -1148,7 +1148,7 @@ def getJSToNativeConversionInfo(type, descriptorProvider, failureCode=None,
         typeName = "%s::%s" % (CGDictionary.makeModuleName(type.inner),
                                CGDictionary.makeDictionaryName(type.inner))
         declType = CGGeneric(typeName)
-        empty = "%s::empty(cx)" % typeName
+        empty = "%s::empty()" % typeName
 
         if type_needs_tracing(type):
             declType = CGTemplatedType("RootedTraceableBox", declType)
@@ -2116,6 +2116,10 @@ class CGDOMJSClass(CGThing):
         self.descriptor = descriptor
 
     def define(self):
+        parentName = self.descriptor.getParentName()
+        if not parentName:
+            parentName = "::dom::bindings::reflector::Reflector"
+
         args = {
             "domClass": DOMClass(self.descriptor),
             "enumerateHook": "None",
@@ -2161,7 +2165,51 @@ static Class: DOMJSClass = DOMJSClass {
         reserved: [0 as *mut _; 3],
     },
     dom_class: %(domClass)s
-};""" % args
+};
+""" % args
+
+
+class CGAssertInheritance(CGThing):
+    """
+    Generate a type assertion for inheritance
+    """
+    def __init__(self, descriptor):
+        CGThing.__init__(self)
+        self.descriptor = descriptor
+
+    def define(self):
+        parent = self.descriptor.interface.parent
+        parentName = ""
+        if parent:
+            parentName = parent.identifier.name
+        else:
+            parentName = "::dom::bindings::reflector::Reflector"
+
+        selfName = self.descriptor.interface.identifier.name
+
+        if selfName == "PaintRenderingContext2D":
+            # PaintRenderingContext2D embeds a CanvasRenderingContext2D
+            # instead of a Reflector as an optimization,
+            # but this is fine since CanvasRenderingContext2D
+            # also has a reflector
+            #
+            # FIXME *RenderingContext2D should use Inline
+            parentName = "::dom::canvasrenderingcontext2d::CanvasRenderingContext2D"
+        args = {
+            "parentName": parentName,
+            "selfName": selfName,
+        }
+
+        return """\
+impl %(selfName)s {
+    fn __assert_parent_type(&self) {
+        use dom::bindings::inheritance::HasParent;
+        // If this type assertion fails, make sure the first field of your
+        // DOM struct is of the correct type -- it must be the parent class.
+        let _: &%(parentName)s = self.as_parent();
+    }
+}
+""" % args
 
 
 def str_to_const_array(s):
@@ -6011,6 +6059,8 @@ class CGDescriptor(CGThing):
                 pass
             else:
                 cgThings.append(CGDOMJSClass(descriptor))
+                if not descriptor.interface.isIteratorInterface():
+                    cgThings.append(CGAssertInheritance(descriptor))
                 pass
 
             if descriptor.isGlobal():
@@ -6224,12 +6274,7 @@ class CGDictionary(CGThing):
 
         return string.Template(
             "impl ${selfName} {\n"
-            "    pub unsafe fn empty(cx: *mut JSContext) -> ${actualType} {\n"
-            "        match ${selfName}::new(cx, HandleValue::null()) {\n"
-            "            Ok(ConversionResult::Success(v)) => v,\n"
-            "            _ => unreachable!(),\n"
-            "        }\n"
-            "    }\n"
+            "${empty}\n"
             "    pub unsafe fn new(cx: *mut JSContext, val: HandleValue) \n"
             "                      -> Result<ConversionResult<${actualType}>, ()> {\n"
             "        let object = if val.get().is_null_or_undefined() {\n"
@@ -6265,6 +6310,7 @@ class CGDictionary(CGThing):
             "}\n").substitute({
                 "selfName": selfName,
                 "actualType": actualType,
+                "empty": CGIndenter(CGGeneric(self.makeEmpty()), indentLevel=4).define(),
                 "initParent": CGIndenter(CGGeneric(initParent), indentLevel=12).define(),
                 "initMembers": CGIndenter(memberInits, indentLevel=12).define(),
                 "insertMembers": CGIndenter(memberInserts, indentLevel=8).define(),
@@ -6329,6 +6375,50 @@ class CGDictionary(CGThing):
             "}") % (member.identifier.name, indent(conversion), indent(default))
 
         return CGGeneric(conversion)
+
+    def makeEmpty(self):
+        if self.hasRequiredFields(self.dictionary):
+            return ""
+        parentTemplate = "parent: %s::%s::empty(),\n"
+        fieldTemplate = "%s: %s,\n"
+        functionTemplate = (
+            "pub fn empty() -> Self {\n"
+            "    Self {\n"
+            "%s"
+            "    }\n"
+            "}"
+        )
+        if self.membersNeedTracing():
+            parentTemplate = "dictionary.parent = %s::%s::empty();\n"
+            fieldTemplate = "dictionary.%s = %s;\n"
+            functionTemplate = (
+                "pub fn empty() -> RootedTraceableBox<Self> {\n"
+                "    let mut dictionary = RootedTraceableBox::new(Self::default());\n"
+                "%s"
+                "    dictionary\n"
+                "}"
+            )
+        s = ""
+        if self.dictionary.parent:
+            s += parentTemplate % (self.makeModuleName(self.dictionary.parent),
+                                   self.makeClassName(self.dictionary.parent))
+        for member, info in self.memberInfo:
+            if not member.optional:
+                return ""
+            default = info.default
+            if not default:
+                default = "None"
+            s += fieldTemplate % (self.makeMemberName(member.identifier.name), default)
+        return functionTemplate % CGIndenter(CGGeneric(s), 12).define()
+
+    def hasRequiredFields(self, dictionary):
+        if dictionary.parent:
+            if self.hasRequiredFields(dictionary.parent):
+                return True
+        for member in dictionary.members:
+            if not member.optional:
+                return True
+        return False
 
     @staticmethod
     def makeMemberName(name):

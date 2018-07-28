@@ -594,7 +594,7 @@ impl WebGL2RenderingContextMethods for WebGL2RenderingContext {
     }
 
     /// https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
-    fn LinkProgram(&self, program: Option<&WebGLProgram>) {
+    fn LinkProgram(&self, program: &WebGLProgram) {
         self.base.LinkProgram(program)
     }
 
@@ -764,6 +764,17 @@ impl WebGL2RenderingContextMethods for WebGL2RenderingContext {
         v: Float32ArrayOrUnrestrictedFloatSequence,
     ) {
         self.base.UniformMatrix4fv(location, transpose, v)
+    }
+
+    // https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.10
+    #[allow(unsafe_code)]
+    unsafe fn GetUniform(
+        &self,
+        cx: *mut JSContext,
+        program: &WebGLProgram,
+        location: &WebGLUniformLocation,
+    ) -> JSVal {
+        self.base.GetUniform(cx, program, location)
     }
 
     /// https://www.khronos.org/registry/webgl/specs/latest/1.0/#5.14.9
@@ -936,6 +947,34 @@ impl WebGL2RenderingContextMethods for WebGL2RenderingContext {
         program: &WebGLProgram,
     ) -> Option<Vec<DomRoot<WebGLShader>>> {
         self.base.GetAttachedShaders(program)
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.9
+    fn DrawArraysInstanced(
+        &self,
+        mode: u32,
+        first: i32,
+        count: i32,
+        primcount: i32,
+    ) {
+        self.base.draw_arrays_instanced(mode, first, count, primcount);
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.9
+    fn DrawElementsInstanced(
+        &self,
+        mode: u32,
+        count: i32,
+        type_: u32,
+        offset: i64,
+        primcount: i32,
+    ) {
+        self.base.draw_elements_instanced(mode, count, type_, offset, primcount);
+    }
+
+    /// https://www.khronos.org/registry/webgl/specs/latest/2.0/#3.7.9
+    fn VertexAttribDivisor(&self, index: u32, divisor: u32) {
+        self.base.vertex_attrib_divisor(index, divisor);
     }
 }
 

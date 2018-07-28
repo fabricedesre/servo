@@ -2,12 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use rustc::hir;
+use rustc::hir::{self, ExprKind};
 use rustc::hir::intravisit as visit;
 use rustc::hir::map as ast_map;
 use rustc::lint::{LateContext, LintPass, LintArray, LateLintPass, LintContext};
 use rustc::ty;
-use syntax::{ast, codemap};
+use syntax::{ast, codemap, symbol::Ident};
 use utils::{match_def_path, in_derive_expn};
 
 declare_lint!(UNROOTED_MUST_ROOT, Deny,
@@ -52,6 +52,7 @@ fn is_unrooted_ty(cx: &LateContext, ty: &ty::TyS, in_new_function: bool) -> bool
                 } else if match_def_path(cx, did.did, &["core", "cell", "Ref"])
                         || match_def_path(cx, did.did, &["core", "cell", "RefMut"])
                         || match_def_path(cx, did.did, &["core", "slice", "Iter"])
+                        || match_def_path(cx, did.did, &["core", "slice", "IterMut"])
                         || match_def_path(cx, did.did, &["std", "collections", "hash", "map", "Entry"])
                         || match_def_path(cx, did.did, &["std", "collections", "hash", "map", "OccupiedEntry"])
                         || match_def_path(cx, did.did, &["std", "collections", "hash", "map", "VacantEntry"])
@@ -132,8 +133,8 @@ impl<'a, 'tcx> LateLintPass<'a, 'tcx> for UnrootedPass {
                 span: codemap::Span,
                 id: ast::NodeId) {
         let in_new_function = match kind {
-            visit::FnKind::ItemFn(n, _, _, _, _, _, _) |
-            visit::FnKind::Method(n, _, _, _) => {
+            visit::FnKind::ItemFn(n, _, _, _, _) |
+            visit::FnKind::Method(Ident { name: n, .. }, _, _, _) => {
                 &*n.as_str() == "new" || n.as_str().starts_with("new_")
             }
             visit::FnKind::Closure(_) => return,
@@ -184,7 +185,7 @@ impl<'a, 'b, 'tcx> visit::Visitor<'tcx> for FnDefVisitor<'a, 'b, 'tcx> {
 
         match expr.node {
             // Trait casts from #[must_root] types are not allowed
-            hir::ExprCast(ref subexpr, _) => require_rooted(cx, self.in_new_function, &*subexpr),
+            ExprKind::Cast(ref subexpr, _) => require_rooted(cx, self.in_new_function, &*subexpr),
             // This catches assignments... the main point of this would be to catch mutable
             // references to `JS<T>`.
             // FIXME: Enable this? Triggers on certain kinds of uses of DomRefCell.

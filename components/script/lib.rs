@@ -7,8 +7,8 @@
 #![feature(const_fn)]
 #![feature(mpsc_select)]
 #![feature(plugin)]
-#![feature(proc_macro)]
 #![feature(string_retain)]
+#![feature(use_extern_macros)]
 
 #![deny(unsafe_code)]
 #![allow(non_snake_case)]
@@ -37,6 +37,7 @@ extern crate dom_struct;
 extern crate domobject_derive;
 extern crate embedder_traits;
 extern crate encoding_rs;
+#[macro_use] extern crate enum_iterator;
 extern crate euclid;
 extern crate fnv;
 extern crate gleam;

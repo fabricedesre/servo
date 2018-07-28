@@ -17,7 +17,7 @@ use dom_struct::dom_struct;
 use servo_arc::Arc;
 use servo_url::ServoUrl;
 use style::attr::AttrValue;
-use style::properties::{DeclarationSource, Importance, PropertyDeclarationBlock, PropertyId, LonghandId, ShorthandId};
+use style::properties::{Importance, PropertyDeclarationBlock, PropertyId, LonghandId, ShorthandId};
 use style::properties::{parse_one_declaration_into, parse_style_attribute, SourcePropertyDeclaration};
 use style::selector_parser::PseudoElement;
 use style::shared_lock::Locked;
@@ -181,6 +181,19 @@ macro_rules! css_properties(
     );
 );
 
+fn remove_property(
+    decls: &mut PropertyDeclarationBlock,
+    id: &PropertyId,
+) -> bool {
+    let first_declaration = decls.first_declaration_to_remove(id);
+    let first_declaration = match first_declaration {
+        Some(i) => i,
+        None => return false,
+    };
+    decls.remove_property(id, first_declaration);
+    true
+}
+
 impl CSSStyleDeclaration {
     #[allow(unrooted_must_root)]
     pub fn new_inherited(owner: CSSStyleOwner,
@@ -253,7 +266,7 @@ impl CSSStyleDeclaration {
         self.owner.mutate_associated_block(|pdb, changed| {
             if value.is_empty() {
                 // Step 3
-                *changed = pdb.remove_property(&id, |_| {});
+                *changed = remove_property(pdb, &id);
                 return Ok(());
             }
 
@@ -272,8 +285,14 @@ impl CSSStyleDeclaration {
             let quirks_mode = window.Document().quirks_mode();
             let mut declarations = SourcePropertyDeclaration::new();
             let result = parse_one_declaration_into(
-                &mut declarations, id, &value, &self.owner.base_url(),
-                window.css_error_reporter(), ParsingMode::DEFAULT, quirks_mode);
+                &mut declarations,
+                id,
+                &value,
+                &self.owner.base_url(),
+                window.css_error_reporter(),
+                ParsingMode::DEFAULT,
+                quirks_mode,
+            );
 
             // Step 6
             match result {
@@ -284,13 +303,17 @@ impl CSSStyleDeclaration {
                 }
             }
 
+            let mut updates = Default::default();
+            *changed =
+                pdb.prepare_for_update(&declarations, importance, &mut updates);
+
+            if !*changed {
+                return Ok(());
+            }
+
             // Step 7
             // Step 8
-            *changed = pdb.extend(
-                declarations.drain(),
-                importance,
-                DeclarationSource::CssOm,
-            );
+            pdb.update(declarations.drain(), importance, &mut updates);
 
             Ok(())
         })
@@ -365,7 +388,7 @@ impl CSSStyleDeclarationMethods for CSSStyleDeclaration {
         let mut string = String::new();
         self.owner.mutate_associated_block(|pdb, changed| {
             pdb.property_value_to_css(&id, &mut string).unwrap();
-            *changed = pdb.remove_property(&id, |_| {});
+            *changed = remove_property(pdb, &id);
         });
 
         // Step 6

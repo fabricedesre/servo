@@ -13,8 +13,8 @@ use dom::cssstylesheet::CSSStyleSheet;
 use dom::window::Window;
 use dom_struct::dom_struct;
 use servo_arc::Arc;
-use style::media_queries::{MediaQuery, parse_media_query_list};
 use style::media_queries::MediaList as StyleMediaList;
+use style::media_queries::MediaQuery;
 use style::parser::ParserContext;
 use style::shared_lock::{SharedRwLock, Locked};
 use style::stylesheets::CssRuleType;
@@ -77,11 +77,14 @@ impl MediaListMethods for MediaList {
         let window = global.as_window();
         let url = window.get_url();
         let quirks_mode = window.Document().quirks_mode();
-        let context = ParserContext::new_for_cssom(&url, Some(CssRuleType::Media),
-                                                   ParsingMode::DEFAULT,
-                                                   quirks_mode);
-        *media_queries = parse_media_query_list(&context, &mut parser,
-                                                window.css_error_reporter());
+        let context = ParserContext::new_for_cssom(
+            &url,
+            Some(CssRuleType::Media),
+            ParsingMode::DEFAULT,
+            quirks_mode,
+            window.css_error_reporter(),
+        );
+        *media_queries = StyleMediaList::parse(&context, &mut parser);
     }
 
     // https://drafts.csswg.org/cssom/#dom-medialist-length
@@ -114,9 +117,13 @@ impl MediaListMethods for MediaList {
         let win = global.as_window();
         let url = win.get_url();
         let quirks_mode = win.Document().quirks_mode();
-        let context = ParserContext::new_for_cssom(&url, Some(CssRuleType::Media),
-                                                   ParsingMode::DEFAULT,
-                                                   quirks_mode);
+        let context = ParserContext::new_for_cssom(
+            &url,
+            Some(CssRuleType::Media),
+            ParsingMode::DEFAULT,
+            quirks_mode,
+            win.css_error_reporter(),
+        );
         let m = MediaQuery::parse(&context, &mut parser);
         // Step 2
         if let Err(_) = m {
@@ -143,9 +150,13 @@ impl MediaListMethods for MediaList {
         let win = global.as_window();
         let url = win.get_url();
         let quirks_mode = win.Document().quirks_mode();
-        let context = ParserContext::new_for_cssom(&url, Some(CssRuleType::Media),
-                                                   ParsingMode::DEFAULT,
-                                                   quirks_mode);
+        let context = ParserContext::new_for_cssom(
+            &url,
+            Some(CssRuleType::Media),
+            ParsingMode::DEFAULT,
+            quirks_mode,
+            win.css_error_reporter(),
+        );
         let m = MediaQuery::parse(&context, &mut parser);
         // Step 2
         if let Err(_) = m {

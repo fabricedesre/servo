@@ -6,6 +6,8 @@
 
 #[cfg(all(target_os = "android", not(feature = "gonk")))]
 extern crate android_injected_glue;
+#[cfg(not(target_os = "android"))]
+extern crate dirs;
 extern crate embedder_traits;
 extern crate euclid;
 extern crate getopts;
@@ -20,8 +22,6 @@ extern crate serde;
 extern crate servo_geometry;
 extern crate servo_url;
 extern crate url;
-#[cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))]
-extern crate xdg;
 
 pub mod basedir;
 #[allow(unsafe_code)]

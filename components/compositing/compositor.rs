@@ -281,6 +281,7 @@ impl webrender_api::RenderNotifier for RenderNotifier {
         _document_id: webrender_api::DocumentId,
         scrolled: bool,
         composite_needed: bool,
+        _render_time_ns: Option<u64>,
     ) {
         if scrolled {
             self.compositor_proxy.send(Msg::NewScrollFrameReady(composite_needed));
@@ -770,15 +771,12 @@ impl<Window: WindowMethods> IOCompositor<Window> {
     fn on_touch_move(&mut self, identifier: TouchId, point: DevicePoint) {
         match self.touch_handler.on_touch_move(identifier, point) {
             TouchAction::Scroll(delta) => {
-                match point.cast() {
-                    Some(point) => self.on_scroll_window_event(
-                        ScrollLocation::Delta(
-                            LayoutVector2D::from_untyped(&delta.to_untyped())
-                        ),
-                        point
+                self.on_scroll_window_event(
+                    ScrollLocation::Delta(
+                        LayoutVector2D::from_untyped(&delta.to_untyped())
                     ),
-                    None => error!("Point cast failed."),
-                }
+                    point.cast()
+                )
             }
             TouchAction::Zoom(magnification, scroll_delta) => {
                 let cursor = TypedPoint2D::new(-1, -1);  // Make sure this hits the base layer.
@@ -1268,7 +1266,7 @@ impl<Window: WindowMethods> IOCompositor<Window> {
                             Ok(mut file) => {
                                 let img = gl::draw_img(gl, rt_info, width, height);
                                 let dynamic_image = DynamicImage::ImageRgb8(img);
-                                if let Err(e) = dynamic_image.save(&mut file, ImageFormat::PNG) {
+                                if let Err(e) = dynamic_image.write_to(&mut file, ImageFormat::PNG) {
                                     error!("Failed to save {} ({}).", path, e);
                                 }
                             },

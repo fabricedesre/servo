@@ -11,7 +11,7 @@ use app_units::Au;
 use canvas_traits::canvas::{CanvasMsg, CanvasId};
 use context::{LayoutContext, with_thread_local_font_context};
 use display_list::ToLayout;
-use display_list::items::{BLUR_INFLATION_FACTOR, OpaqueNode};
+use display_list::items::{BLUR_INFLATION_FACTOR, ClipScrollNodeIndex, OpaqueNode};
 use euclid::{Point2D, Vector2D, Rect, Size2D};
 use floats::ClearType;
 use flow::{GetBaseFlow, ImmutableFlowUtils};
@@ -152,6 +152,11 @@ pub struct Fragment {
     /// to 0, but it assigned during the collect_stacking_contexts phase of display
     /// list construction.
     pub stacking_context_id: StackingContextId,
+
+    /// The indices of this Fragment's ClipScrollNode. If this fragment doesn't have a
+    /// `established_reference_frame` assigned, it will use the `clipping_and_scrolling` of the
+    /// parent block.
+    pub established_reference_frame: Option<ClipScrollNodeIndex>,
 }
 
 impl Serialize for Fragment {
@@ -633,6 +638,7 @@ impl Fragment {
             flags: FragmentFlags::empty(),
             debug_id: DebugId::new(),
             stacking_context_id: StackingContextId::root(),
+            established_reference_frame: None,
         }
     }
 
@@ -662,6 +668,7 @@ impl Fragment {
             flags: FragmentFlags::empty(),
             debug_id: DebugId::new(),
             stacking_context_id: StackingContextId::root(),
+            established_reference_frame: None,
         }
     }
 
@@ -687,6 +694,7 @@ impl Fragment {
             flags: FragmentFlags::empty(),
             debug_id: DebugId::new(),
             stacking_context_id: StackingContextId::root(),
+            established_reference_frame: None,
         }
     }
 
@@ -715,6 +723,7 @@ impl Fragment {
             flags: FragmentFlags::empty(),
             debug_id: self.debug_id.clone(),
             stacking_context_id: StackingContextId::root(),
+            established_reference_frame: None,
         }
     }
 
@@ -818,7 +827,7 @@ impl Fragment {
             SpecificFragmentInfo::TableCell => {
                 let base_quantities = QuantitiesIncludedInIntrinsicInlineSizes::INTRINSIC_INLINE_SIZE_INCLUDES_PADDING |
                     QuantitiesIncludedInIntrinsicInlineSizes::INTRINSIC_INLINE_SIZE_INCLUDES_SPECIFIED;
-                if self.style.get_inheritedtable().border_collapse ==
+                if self.style.get_inherited_table().border_collapse ==
                         BorderCollapse::Separate {
                     base_quantities | QuantitiesIncludedInIntrinsicInlineSizes::INTRINSIC_INLINE_SIZE_INCLUDES_BORDER
                 } else {
@@ -828,7 +837,7 @@ impl Fragment {
             SpecificFragmentInfo::TableWrapper => {
                 let base_quantities = QuantitiesIncludedInIntrinsicInlineSizes::INTRINSIC_INLINE_SIZE_INCLUDES_MARGINS |
                     QuantitiesIncludedInIntrinsicInlineSizes::INTRINSIC_INLINE_SIZE_INCLUDES_SPECIFIED;
-                if self.style.get_inheritedtable().border_collapse ==
+                if self.style.get_inherited_table().border_collapse ==
                         BorderCollapse::Separate {
                     base_quantities | QuantitiesIncludedInIntrinsicInlineSizes::INTRINSIC_INLINE_SIZE_INCLUDES_BORDER
                 } else {
@@ -838,7 +847,7 @@ impl Fragment {
             SpecificFragmentInfo::TableRow => {
                 let base_quantities =
                     QuantitiesIncludedInIntrinsicInlineSizes::INTRINSIC_INLINE_SIZE_INCLUDES_SPECIFIED;
-                if self.style.get_inheritedtable().border_collapse ==
+                if self.style.get_inherited_table().border_collapse ==
                         BorderCollapse::Separate {
                     base_quantities | QuantitiesIncludedInIntrinsicInlineSizes::INTRINSIC_INLINE_SIZE_INCLUDES_BORDER
                 } else {
@@ -1272,7 +1281,7 @@ impl Fragment {
     pub fn compute_border_and_padding(&mut self,
                                       containing_block_inline_size: Au) {
         // Compute border.
-        let border = match self.style.get_inheritedtable().border_collapse {
+        let border = match self.style.get_inherited_table().border_collapse {
             BorderCollapse::Separate => self.border_width(),
             BorderCollapse::Collapse => LogicalMargin::zero(self.style.writing_mode),
         };
@@ -1377,7 +1386,7 @@ impl Fragment {
     }
 
     pub fn white_space(&self) -> WhiteSpace {
-        self.style().get_inheritedtext().white_space
+        self.style().get_inherited_text().white_space
     }
 
     pub fn color(&self) -> Color {
@@ -1625,12 +1634,12 @@ impl Fragment {
         let mut flags = SplitOptions::empty();
         if starts_line {
             flags.insert(SplitOptions::STARTS_LINE);
-            if self.style().get_inheritedtext().overflow_wrap == OverflowWrap::BreakWord {
+            if self.style().get_inherited_text().overflow_wrap == OverflowWrap::BreakWord {
                 flags.insert(SplitOptions::RETRY_AT_CHARACTER_BOUNDARIES)
             }
         }
 
-        match self.style().get_inheritedtext().word_break {
+        match self.style().get_inherited_text().word_break {
             WordBreak::Normal | WordBreak::KeepAll => {
                 // Break at normal word boundaries. keep-all forbids soft wrap opportunities.
                 let natural_word_breaking_strategy =

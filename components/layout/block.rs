@@ -1263,7 +1263,8 @@ impl BlockFlow {
                 // TODO: Right now, this content block-size value includes the
                 // margin because of erroneous block-size calculation in fragment.
                 // Check this when that has been fixed.
-                let block_size_used_val = self.fragment.border_box.size.block;
+                let block_size_used_val = self.fragment.border_box.size.block -
+                    self.fragment.border_padding.block_start_end();
                 solution = Some(BSizeConstraintSolution::solve_vertical_constraints_abs_replaced(
                         block_size_used_val,
                         margin_block_start,
@@ -1305,6 +1306,7 @@ impl BlockFlow {
         }
 
         let block_size = solution.block_size + self.fragment.border_padding.block_start_end();
+
         self.fragment.border_box.size.block = block_size;
         self.base.position.size.block = block_size;
 
@@ -1417,7 +1419,7 @@ impl BlockFlow {
             // Per CSS 2.1 § 16.3.1, text alignment propagates to all children in flow.
             //
             // TODO(#2265, pcwalton): Do this in the cascade instead.
-            let containing_block_text_align = self.fragment.style().get_inheritedtext().text_align;
+            let containing_block_text_align = self.fragment.style().get_inherited_text().text_align;
             kid.mut_base().flags.set_text_align(containing_block_text_align);
 
             // Handle `text-indent` on behalf of any inline children that we have. This is
@@ -1425,7 +1427,7 @@ impl BlockFlow {
             // we know.
             if kid.is_inline_flow() {
                 kid.as_mut_inline().first_line_indentation =
-                    self.fragment.style().get_inheritedtext().text_indent
+                    self.fragment.style().get_inherited_text().text_indent
                         .to_used_value(containing_block_size);
             }
         }
@@ -2340,7 +2342,7 @@ pub trait ISizeAndMarginsComputer {
                                                         containing_block_inline_size),
                                   MaybeAuto::from_style(position.inline_end,
                                                         containing_block_inline_size),
-                                  style.get_inheritedtext().text_align,
+                                  style.get_inherited_text().text_align,
                                   available_inline_size)
     }
 

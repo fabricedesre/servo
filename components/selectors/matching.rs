@@ -418,10 +418,6 @@ where
     match combinator {
         Combinator::NextSibling | Combinator::LaterSibling => element.prev_sibling_element(),
         Combinator::Child | Combinator::Descendant => {
-            if element.blocks_ancestor_combinators() {
-                return None;
-            }
-
             match element.parent_element() {
                 Some(e) => return Some(e),
                 None => {},
@@ -576,7 +572,7 @@ where
             _ => {},
         }
 
-        if element.is_link() || combinator.is_sibling() {
+        if element.is_link() {
             visited_handling = VisitedHandlingMode::AllLinksUnvisited;
         }
 

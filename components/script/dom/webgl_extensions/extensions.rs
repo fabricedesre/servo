@@ -4,6 +4,7 @@
 
 use canvas_traits::webgl::{WebGLError, WebGLVersion};
 use dom::bindings::cell::DomRefCell;
+use dom::bindings::codegen::Bindings::ANGLEInstancedArraysBinding::ANGLEInstancedArraysConstants;
 use dom::bindings::codegen::Bindings::EXTTextureFilterAnisotropicBinding::EXTTextureFilterAnisotropicConstants;
 use dom::bindings::codegen::Bindings::OESStandardDerivativesBinding::OESStandardDerivativesConstants;
 use dom::bindings::codegen::Bindings::OESTextureHalfFloatBinding::OESTextureHalfFloatConstants;
@@ -54,6 +55,13 @@ const DEFAULT_DISABLED_GET_TEX_PARAMETER_NAMES_WEBGL1: [GLenum; 1] = [
     EXTTextureFilterAnisotropicConstants::TEXTURE_MAX_ANISOTROPY_EXT,
 ];
 
+// Param names that are implemented for glGetVertexAttrib in a WebGL 1.0 context
+// but must trigger a InvalidEnum error until the related WebGL Extensions are enabled.
+// Example: https://www.khronos.org/registry/webgl/extensions/ANGLE_instanced_arrays/
+const DEFAULT_DISABLED_GET_VERTEX_ATTRIB_NAMES_WEBGL1: [GLenum; 1] = [
+    ANGLEInstancedArraysConstants::VERTEX_ATTRIB_ARRAY_DIVISOR_ANGLE,
+];
+
 /// WebGL features that are enabled/disabled by WebGL Extensions.
 #[derive(JSTraceable, MallocSizeOf)]
 struct WebGLExtensionFeatures {
@@ -68,8 +76,12 @@ struct WebGLExtensionFeatures {
     disabled_get_parameter_names: FnvHashSet<GLenum>,
     /// WebGL GetTexParameter() names enabled by extensions.
     disabled_get_tex_parameter_names: FnvHashSet<GLenum>,
+    /// WebGL GetAttribVertex() names enabled by extensions.
+    disabled_get_vertex_attrib_names: FnvHashSet<GLenum>,
     /// WebGL OES_element_index_uint extension.
     element_index_uint_enabled: bool,
+    /// WebGL EXT_blend_minmax extension.
+    blend_minmax_enabled: bool,
 }
 
 impl WebGLExtensionFeatures {
@@ -78,18 +90,29 @@ impl WebGLExtensionFeatures {
             disabled_tex_types,
             disabled_get_parameter_names,
             disabled_get_tex_parameter_names,
+            disabled_get_vertex_attrib_names,
             element_index_uint_enabled,
+            blend_minmax_enabled,
         ) = match webgl_version {
             WebGLVersion::WebGL1 => {
                 (
                     DEFAULT_DISABLED_TEX_TYPES_WEBGL1.iter().cloned().collect(),
                     DEFAULT_DISABLED_GET_PARAMETER_NAMES_WEBGL1.iter().cloned().collect(),
                     DEFAULT_DISABLED_GET_TEX_PARAMETER_NAMES_WEBGL1.iter().cloned().collect(),
+                    DEFAULT_DISABLED_GET_VERTEX_ATTRIB_NAMES_WEBGL1.iter().cloned().collect(),
+                    false,
                     false,
                 )
             },
             WebGLVersion::WebGL2 => {
-                (Default::default(), Default::default(), Default::default(), true)
+                (
+                    Default::default(),
+                    Default::default(),
+                    Default::default(),
+                    Default::default(),
+                    true,
+                    true,
+                )
             }
         };
         Self {
@@ -101,7 +124,9 @@ impl WebGLExtensionFeatures {
             hint_targets: Default::default(),
             disabled_get_parameter_names,
             disabled_get_tex_parameter_names,
+            disabled_get_vertex_attrib_names,
             element_index_uint_enabled,
+            blend_minmax_enabled,
         }
     }
 }
@@ -264,7 +289,18 @@ impl WebGLExtensions {
         !self.features.borrow().disabled_get_tex_parameter_names.contains(&name)
     }
 
+    pub fn enable_get_vertex_attrib_name(&self, name: GLenum) {
+        self.features.borrow_mut().disabled_get_vertex_attrib_names.remove(&name);
+    }
+
+    pub fn is_get_vertex_attrib_name_enabled(&self, name: GLenum) -> bool {
+        !self.features.borrow().disabled_get_vertex_attrib_names.contains(&name)
+    }
+
     fn register_all_extensions(&self) {
+        self.register::<ext::angleinstancedarrays::ANGLEInstancedArrays>();
+        self.register::<ext::extblendminmax::EXTBlendMinmax>();
+        self.register::<ext::extshadertexturelod::EXTShaderTextureLod>();
         self.register::<ext::exttexturefilteranisotropic::EXTTextureFilterAnisotropic>();
         self.register::<ext::oeselementindexuint::OESElementIndexUint>();
         self.register::<ext::oesstandardderivatives::OESStandardDerivatives>();
@@ -281,6 +317,14 @@ impl WebGLExtensions {
 
     pub fn is_element_index_uint_enabled(&self) -> bool {
         self.features.borrow().element_index_uint_enabled
+    }
+
+    pub fn enable_blend_minmax(&self) {
+        self.features.borrow_mut().blend_minmax_enabled = true;
+    }
+
+    pub fn is_blend_minmax_enabled(&self) -> bool {
+        self.features.borrow().blend_minmax_enabled
     }
 }
 

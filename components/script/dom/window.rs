@@ -33,7 +33,10 @@ use dom::cssstyledeclaration::{CSSModificationAccess, CSSStyleDeclaration, CSSSt
 use dom::customelementregistry::CustomElementRegistry;
 use dom::document::{AnimationFrameCallback, Document};
 use dom::element::Element;
+use dom::event::Event;
+use dom::eventtarget::EventTarget;
 use dom::globalscope::GlobalScope;
+use dom::hashchangeevent::HashChangeEvent;
 use dom::history::History;
 use dom::location::Location;
 use dom::mediaquerylist::{MediaQueryList, WeakMediaQueryListVec};
@@ -100,6 +103,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Sender, channel};
 use std::sync::mpsc::TryRecvError::{Disconnected, Empty};
+use style::error_reporting::ParseErrorReporter;
 use style::media_queries;
 use style::parser::ParserContext as CssParserContext;
 use style::properties::{ComputedValues, PropertyId};
@@ -108,11 +112,13 @@ use style::str::HTML_SPACE_CHARACTERS;
 use style::stylesheets::CssRuleType;
 use style_traits::{CSSPixel, DevicePixel, ParsingMode};
 use task::TaskCanceller;
+use task_source::TaskSourceName;
 use task_source::dom_manipulation::DOMManipulationTaskSource;
 use task_source::file_reading::FileReadingTaskSource;
 use task_source::history_traversal::HistoryTraversalTaskSource;
 use task_source::networking::NetworkingTaskSource;
 use task_source::performance_timeline::PerformanceTimelineTaskSource;
+use task_source::remote_event::RemoteEventTaskSource;
 use task_source::user_interaction::UserInteractionTaskSource;
 use time;
 use timers::{IsInterval, TimerCallback};
@@ -170,6 +176,8 @@ pub struct Window {
     file_reading_task_source: FileReadingTaskSource,
     #[ignore_malloc_size_of = "task sources are hard"]
     performance_timeline_task_source: PerformanceTimelineTaskSource,
+    #[ignore_malloc_size_of = "task sources are hard"]
+    remote_event_task_source: RemoteEventTaskSource,
     navigator: MutNullableDom<Navigator>,
     #[ignore_malloc_size_of = "Arc"]
     image_cache: Arc<ImageCache>,
@@ -245,9 +253,9 @@ pub struct Window {
 
     current_viewport: Cell<Rect<Au>>,
 
-    /// A flag to prevent async events from attempting to interact with this window.
+    /// A map of flags to prevent events from a given task source from attempting to interact with this window.
     #[ignore_malloc_size_of = "defined in std"]
-    ignore_further_async_events: DomRefCell<Arc<AtomicBool>>,
+    ignore_further_async_events: DomRefCell<HashMap<TaskSourceName, Arc<AtomicBool>>>,
 
     error_reporter: CSSErrorReporter,
 
@@ -307,7 +315,15 @@ impl Window {
             *self.js_runtime.borrow_for_script_deallocation() = None;
             self.window_proxy.set(None);
             self.current_state.set(WindowState::Zombie);
-            self.ignore_further_async_events.borrow().store(true, Ordering::Relaxed);
+            self.ignore_all_events();
+        }
+    }
+
+    fn ignore_all_events(&self) {
+        let mut ignore_flags = self.ignore_further_async_events.borrow_mut();
+        for task_source_name in TaskSourceName::all() {
+            let flag = ignore_flags.entry(task_source_name).or_insert(Default::default());
+            flag.store(true, Ordering::Relaxed);
         }
     }
 
@@ -346,6 +362,10 @@ impl Window {
 
     pub fn performance_timeline_task_source(&self) -> PerformanceTimelineTaskSource {
         self.performance_timeline_task_source.clone()
+    }
+
+    pub fn remote_event_task_source(&self) -> RemoteEventTaskSource {
+        self.remote_event_task_source.clone()
     }
 
     pub fn main_thread_script_chan(&self) -> &Sender<MainThreadScriptMsg> {
@@ -389,8 +409,8 @@ impl Window {
          &self.bluetooth_extra_permission_data
     }
 
-    pub fn css_error_reporter(&self) -> &CSSErrorReporter {
-        &self.error_reporter
+    pub fn css_error_reporter(&self) -> Option<&ParseErrorReporter> {
+        Some(&self.error_reporter)
     }
 
     /// Sets a new list of scroll offsets.
@@ -1017,11 +1037,15 @@ impl WindowMethods for Window {
         let mut parser = Parser::new(&mut input);
         let url = self.get_url();
         let quirks_mode = self.Document().quirks_mode();
-        let context = CssParserContext::new_for_cssom(&url, Some(CssRuleType::Media),
-                                                      ParsingMode::DEFAULT,
-                                                      quirks_mode);
-        let media_query_list = media_queries::parse_media_query_list(&context, &mut parser,
-                                                                     self.css_error_reporter());
+        let context = CssParserContext::new_for_cssom(
+            &url,
+            Some(CssRuleType::Media),
+            ParsingMode::DEFAULT,
+            quirks_mode,
+            self.css_error_reporter(),
+        );
+        let media_query_list =
+            media_queries::MediaList::parse(&context, &mut parser);
         let document = self.Document();
         let mql = MediaQueryList::new(&document, media_query_list);
         self.media_query_lists.push(&*mql);
@@ -1060,9 +1084,11 @@ impl Window {
         self.paint_worklet.or_init(|| self.new_paint_worklet())
     }
 
-    pub fn task_canceller(&self) -> TaskCanceller {
+    pub fn task_canceller(&self, name: TaskSourceName) -> TaskCanceller {
+        let mut flags = self.ignore_further_async_events.borrow_mut();
+        let cancel_flag = flags.entry(name).or_insert(Default::default());
         TaskCanceller {
-            cancelled: Some(self.ignore_further_async_events.borrow().clone()),
+            cancelled: Some(cancel_flag.clone()),
         }
     }
 
@@ -1079,8 +1105,12 @@ impl Window {
     /// This sets the current `ignore_further_async_events` sentinel value to
     /// `true` and replaces it with a brand new one for future tasks.
     pub fn cancel_all_tasks(&self) {
-        let cancelled = mem::replace(&mut *self.ignore_further_async_events.borrow_mut(), Default::default());
-        cancelled.store(true, Ordering::Relaxed);
+        let mut ignore_flags = self.ignore_further_async_events.borrow_mut();
+        for task_source_name in TaskSourceName::all() {
+            let mut flag = ignore_flags.entry(task_source_name).or_insert(Default::default());
+            let cancelled = mem::replace(&mut *flag, Default::default());
+            cancelled.store(true, Ordering::Relaxed);
+        }
     }
 
     pub fn clear_js_runtime(&self) {
@@ -1112,7 +1142,7 @@ impl Window {
         self.current_state.set(WindowState::Zombie);
         *self.js_runtime.borrow_mut() = None;
         self.window_proxy.set(None);
-        self.ignore_further_async_events.borrow().store(true, Ordering::SeqCst);
+        self.ignore_all_events();
     }
 
     /// <https://drafts.csswg.org/cssom-view/#dom-window-scroll>
@@ -1555,13 +1585,33 @@ impl Window {
                     referrer_policy: Option<ReferrerPolicy>) {
         let doc = self.Document();
         let referrer_policy = referrer_policy.or(doc.get_referrer_policy());
-
         // https://html.spec.whatwg.org/multipage/#navigating-across-documents
         if !force_reload && url.as_url()[..Position::AfterQuery] ==
             doc.url().as_url()[..Position::AfterQuery] {
                 // Step 6
                 if let Some(fragment) = url.fragment() {
+                    self.send_to_constellation(ScriptMsg::NavigatedToFragment(url.clone(), replace));
                     doc.check_and_scroll_fragment(fragment);
+                    let this = Trusted::new(self);
+                    let old_url = doc.url().into_string();
+                    let new_url = url.clone().into_string();
+                    let task = task!(hashchange_event: move || {
+                        let this = this.root();
+                        let event = HashChangeEvent::new(
+                            &this,
+                            atom!("hashchange"),
+                            false,
+                            false,
+                            old_url,
+                            new_url);
+                        event.upcast::<Event>().fire(this.upcast::<EventTarget>());
+                    });
+                    // FIXME(nox): Why are errors silenced here?
+                    let _ = self.script_chan.send(CommonScriptMsg::Task(
+                        ScriptThreadEventCategory::DomEvent,
+                        Box::new(self.task_canceller(TaskSourceName::DOMManipulation).wrap_task(task)),
+                        self.pipeline_id()
+                    ));
                     doc.set_url(url.clone());
                     return
                 }
@@ -1779,6 +1829,7 @@ impl Window {
         history_traversal_task_source: HistoryTraversalTaskSource,
         file_reading_task_source: FileReadingTaskSource,
         performance_timeline_task_source: PerformanceTimelineTaskSource,
+        remote_event_task_source: RemoteEventTaskSource,
         image_cache_chan: Sender<ImageCacheMsg>,
         image_cache: Arc<ImageCache>,
         resource_threads: ResourceThreads,
@@ -1831,6 +1882,7 @@ impl Window {
             history_traversal_task_source,
             file_reading_task_source,
             performance_timeline_task_source,
+            remote_event_task_source,
             image_cache_chan,
             image_cache,
             navigator: Default::default(),
@@ -1994,9 +2046,10 @@ impl Window {
         });
         // FIXME(nox): Why are errors silenced here?
         // TODO(#12718): Use the "posted message task source".
+        // TODO: When switching to the right task source, update the task_canceller call too.
         let _ = self.script_chan.send(CommonScriptMsg::Task(
             ScriptThreadEventCategory::DomEvent,
-            Box::new(self.task_canceller().wrap_task(task)),
+            Box::new(self.task_canceller(TaskSourceName::DOMManipulation).wrap_task(task)),
             self.pipeline_id()
         ));
     }

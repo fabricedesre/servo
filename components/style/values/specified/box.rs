@@ -30,6 +30,17 @@ fn moz_display_values_enabled(context: &ParserContext) -> bool {
     }
 }
 
+#[cfg(feature = "gecko")]
+fn moz_box_display_values_enabled(context: &ParserContext) -> bool {
+    use gecko_bindings::structs;
+    use stylesheets::Origin;
+    context.stylesheet_origin == Origin::UserAgent ||
+    context.chrome_rules_enabled() ||
+    unsafe {
+        structs::StaticPrefs_sVarCache_layout_css_xul_box_display_values_content_enabled
+    }
+}
+
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, MallocSizeOf, Parse, PartialEq,
          SpecifiedValueInfo, ToComputedValue, ToCss)]
@@ -80,8 +91,10 @@ pub enum Display {
     #[cfg(feature = "gecko")]
     WebkitInlineBox,
     #[cfg(feature = "gecko")]
+    #[parse(condition = "moz_box_display_values_enabled")]
     MozBox,
     #[cfg(feature = "gecko")]
+    #[parse(condition = "moz_box_display_values_enabled")]
     MozInlineBox,
     #[cfg(feature = "gecko")]
     #[parse(condition = "moz_display_values_enabled")]
@@ -827,4 +840,33 @@ impl TransitionProperty {
             TransitionProperty::Unsupported(..) => return Err(()),
         })
     }
+}
+
+#[allow(missing_docs)]
+#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
+#[derive(Clone, Copy, Debug, Eq, Hash, MallocSizeOf, Parse, PartialEq,
+         SpecifiedValueInfo, ToCss)]
+/// https://drafts.csswg.org/css-box/#propdef-float
+pub enum Float {
+    Left,
+    Right,
+    None,
+    // https://drafts.csswg.org/css-logical-props/#float-clear
+    InlineStart,
+    InlineEnd
+}
+
+#[allow(missing_docs)]
+#[cfg_attr(feature = "servo", derive(Deserialize, Serialize))]
+#[derive(Clone, Copy, Debug, Eq, Hash, MallocSizeOf, Parse, PartialEq,
+         SpecifiedValueInfo, ToCss)]
+/// https://drafts.csswg.org/css-box/#propdef-clear
+pub enum Clear {
+    None,
+    Left,
+    Right,
+    Both,
+    // https://drafts.csswg.org/css-logical-props/#float-clear
+    InlineStart,
+    InlineEnd
 }

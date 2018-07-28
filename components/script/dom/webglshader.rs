@@ -3,21 +3,25 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // https://www.khronos.org/registry/webgl/specs/latest/1.0/webgl.idl
-use canvas_traits::webgl::{WebGLCommand, WebGLError, WebGLMsgSender};
+use canvas_traits::webgl::{WebGLCommand, WebGLError};
 use canvas_traits::webgl::{WebGLResult, WebGLSLVersion, WebGLShaderId};
 use canvas_traits::webgl::{WebGLVersion, webgl_channel};
 use dom::bindings::cell::DomRefCell;
 use dom::bindings::codegen::Bindings::WebGLShaderBinding;
-use dom::bindings::reflector::reflect_dom_object;
+use dom::bindings::inheritance::Castable;
+use dom::bindings::reflector::{DomObject, reflect_dom_object};
 use dom::bindings::root::DomRoot;
 use dom::bindings::str::DOMString;
 use dom::webgl_extensions::WebGLExtensions;
+use dom::webgl_extensions::ext::extshadertexturelod::EXTShaderTextureLod;
 use dom::webgl_extensions::ext::oesstandardderivatives::OESStandardDerivatives;
 use dom::webglobject::WebGLObject;
-use dom::window::Window;
+use dom::webglrenderingcontext::WebGLRenderingContext;
 use dom_struct::dom_struct;
 use mozangle::shaders::{BuiltInResources, Output, ShaderValidator};
+use offscreen_gl_context::GLLimits;
 use std::cell::Cell;
+use std::os::raw::c_int;
 use std::sync::{ONCE_INIT, Once};
 
 #[derive(Clone, Copy, Debug, JSTraceable, MallocSizeOf, PartialEq)]
@@ -32,55 +36,50 @@ pub struct WebGLShader {
     webgl_object: WebGLObject,
     id: WebGLShaderId,
     gl_type: u32,
-    source: DomRefCell<Option<DOMString>>,
-    info_log: DomRefCell<Option<String>>,
+    source: DomRefCell<DOMString>,
+    info_log: DomRefCell<DOMString>,
     is_deleted: Cell<bool>,
     attached_counter: Cell<u32>,
     compilation_status: Cell<ShaderCompilationStatus>,
-    #[ignore_malloc_size_of = "Defined in ipc-channel"]
-    renderer: WebGLMsgSender,
 }
 
 static GLSLANG_INITIALIZATION: Once = ONCE_INIT;
 
 impl WebGLShader {
-    fn new_inherited(renderer: WebGLMsgSender,
-                     id: WebGLShaderId,
-                     shader_type: u32)
-                     -> WebGLShader {
+    fn new_inherited(
+        context: &WebGLRenderingContext,
+        id: WebGLShaderId,
+        shader_type: u32,
+    ) -> Self {
         GLSLANG_INITIALIZATION.call_once(|| ::mozangle::shaders::initialize().unwrap());
-        WebGLShader {
-            webgl_object: WebGLObject::new_inherited(),
+        Self {
+            webgl_object: WebGLObject::new_inherited(context),
             id: id,
             gl_type: shader_type,
-            source: DomRefCell::new(None),
-            info_log: DomRefCell::new(None),
+            source: Default::default(),
+            info_log: Default::default(),
             is_deleted: Cell::new(false),
             attached_counter: Cell::new(0),
             compilation_status: Cell::new(ShaderCompilationStatus::NotCompiled),
-            renderer: renderer,
         }
     }
 
-    pub fn maybe_new(window: &Window,
-                     renderer: WebGLMsgSender,
-                     shader_type: u32)
-                     -> Option<DomRoot<WebGLShader>> {
+    pub fn maybe_new(context: &WebGLRenderingContext, shader_type: u32) -> Option<DomRoot<Self>> {
         let (sender, receiver) = webgl_channel().unwrap();
-        renderer.send(WebGLCommand::CreateShader(shader_type, sender)).unwrap();
-
-        let result = receiver.recv().unwrap();
-        result.map(|shader_id| WebGLShader::new(window, renderer, shader_id, shader_type))
+        context.send_command(WebGLCommand::CreateShader(shader_type, sender));
+        receiver.recv().unwrap().map(|id| WebGLShader::new(context, id, shader_type))
     }
 
-    pub fn new(window: &Window,
-               renderer: WebGLMsgSender,
-               id: WebGLShaderId,
-               shader_type: u32)
-               -> DomRoot<WebGLShader> {
-        reflect_dom_object(Box::new(WebGLShader::new_inherited(renderer, id, shader_type)),
-                           window,
-                           WebGLShaderBinding::Wrap)
+    pub fn new(
+        context: &WebGLRenderingContext,
+        id: WebGLShaderId,
+        shader_type: u32,
+    ) -> DomRoot<Self> {
+        reflect_dom_object(
+            Box::new(WebGLShader::new_inherited(context, id, shader_type)),
+            &*context.global(),
+            WebGLShaderBinding::Wrap,
+        )
     }
 }
 
@@ -99,6 +98,7 @@ impl WebGLShader {
         &self,
         webgl_version: WebGLVersion,
         glsl_version: WebGLSLVersion,
+        limits: &GLLimits,
         ext: &WebGLExtensions,
     ) -> WebGLResult<()> {
         if self.is_deleted.get() && !self.is_attached() {
@@ -109,14 +109,20 @@ impl WebGLShader {
         }
 
         let source = self.source.borrow();
-        let source = match source.as_ref() {
-            Some(source) => source,
-            None => return Ok(()),
-        };
 
-        let mut params = BuiltInResources::default();
-        params.FragmentPrecisionHigh = 1;
-        params.OES_standard_derivatives = ext.is_enabled::<OESStandardDerivatives>() as i32;
+        let params = BuiltInResources {
+            MaxVertexAttribs: limits.max_vertex_attribs as c_int,
+            MaxVertexUniformVectors: limits.max_vertex_uniform_vectors as c_int,
+            MaxVaryingVectors: limits.max_varying_vectors as c_int,
+            MaxVertexTextureImageUnits: limits.max_vertex_texture_image_units as c_int,
+            MaxCombinedTextureImageUnits: limits.max_combined_texture_image_units as c_int,
+            MaxTextureImageUnits: limits.max_texture_image_units as c_int,
+            MaxFragmentUniformVectors: limits.max_fragment_uniform_vectors as c_int,
+            OES_standard_derivatives: ext.is_enabled::<OESStandardDerivatives>() as c_int,
+            EXT_shader_texture_lod: ext.is_enabled::<EXTShaderTextureLod>() as c_int,
+            FragmentPrecisionHigh: 1,
+            ..BuiltInResources::default()
+        };
         let validator = match webgl_version {
             WebGLVersion::WebGL1 => {
                 let output_format = if cfg!(any(target_os = "android", target_os = "ios")) {
@@ -152,14 +158,15 @@ impl WebGLShader {
             },
         };
 
-        match validator.compile_and_translate(&[source]) {
+        match validator.compile_and_translate(&[&source]) {
             Ok(translated_source) => {
                 debug!("Shader translated: {}", translated_source);
                 // NOTE: At this point we should be pretty sure that the compilation in the paint thread
                 // will succeed.
                 // It could be interesting to retrieve the info log from the paint thread though
-                let msg = WebGLCommand::CompileShader(self.id, translated_source);
-                self.renderer.send(msg).unwrap();
+                self.upcast::<WebGLObject>()
+                    .context()
+                    .send_command(WebGLCommand::CompileShader(self.id, translated_source));
                 self.compilation_status.set(ShaderCompilationStatus::Succeeded);
             },
             Err(error) => {
@@ -168,7 +175,7 @@ impl WebGLShader {
             },
         }
 
-        *self.info_log.borrow_mut() = Some(validator.info_log());
+        *self.info_log.borrow_mut() = validator.info_log().into();
 
         // TODO(emilio): More data (like uniform data) should be collected
         // here to properly validate uniforms.
@@ -184,7 +191,9 @@ impl WebGLShader {
     pub fn delete(&self) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
-            let _ = self.renderer.send(WebGLCommand::DeleteShader(self.id));
+            self.upcast::<WebGLObject>()
+                .context()
+                .send_command(WebGLCommand::DeleteShader(self.id));
         }
     }
 
@@ -206,18 +215,18 @@ impl WebGLShader {
     }
 
     /// glGetShaderInfoLog
-    pub fn info_log(&self) -> Option<String> {
+    pub fn info_log(&self) -> DOMString {
         self.info_log.borrow().clone()
     }
 
     /// Get the shader source
-    pub fn source(&self) -> Option<DOMString> {
+    pub fn source(&self) -> DOMString {
         self.source.borrow().clone()
     }
 
     /// glShaderSource
     pub fn set_source(&self, source: DOMString) {
-        *self.source.borrow_mut() = Some(source);
+        *self.source.borrow_mut() = source;
     }
 
     pub fn successfully_compiled(&self) -> bool {

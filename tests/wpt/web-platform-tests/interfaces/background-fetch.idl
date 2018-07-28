@@ -1,4 +1,7 @@
-// 4.1. Extensions to ServiceWorkerGlobalScope
+// GENERATED CONTENT - DO NOT EDIT
+// Content of this file was automatically extracted from the
+// "Background Fetch" spec.
+// See: https://wicg.github.io/background-fetch/
 
 partial interface ServiceWorkerGlobalScope {
   attribute EventHandler onbackgroundfetched;
@@ -7,37 +10,31 @@ partial interface ServiceWorkerGlobalScope {
   attribute EventHandler onbackgroundfetchclick;
 };
 
-// 4.2. Extensions to ServiceWorkerRegistration
-
 partial interface ServiceWorkerRegistration {
   readonly attribute BackgroundFetchManager backgroundFetch;
 };
-
-// 4.3. BackgroundFetchManager
 
 [Exposed=(Window,Worker)]
 interface BackgroundFetchManager {
   Promise<BackgroundFetchRegistration> fetch(DOMString id, (RequestInfo or sequence<RequestInfo>) requests, optional BackgroundFetchOptions options);
   Promise<BackgroundFetchRegistration?> get(DOMString id);
-  Promise<FrozenArray<DOMString>> getIds();
+  Promise<sequence<DOMString>> getIds();
   // TODO: in future this should become an async iterator for BackgroundFetchRegistration objects
 };
 
 dictionary BackgroundFetchOptions {
-  sequence<IconDefinition> icons;
-  DOMString title;
-  unsigned long long downloadTotal;
+  sequence<IconDefinition> icons = [];
+  DOMString title = "";
+  unsigned long long downloadTotal = 0;
 };
 
 // This is taken from https://w3c.github.io/manifest/#icons-member.
 // This definition should probably be moved somewhere more general.
 dictionary IconDefinition {
   DOMString src;
-  DOMString sizes;
-  DOMString type;
+  DOMString sizes = "";
+  DOMString type = "";
 };
-
-// 4.4. BackgroundFetchRegistration
 
 [Exposed=(Window,Worker)]
 interface BackgroundFetchRegistration : EventTarget {
@@ -54,14 +51,10 @@ interface BackgroundFetchRegistration : EventTarget {
 };
 
 [Exposed=(Window,Worker)]
-interface BackgroundFetchFetch {
-  readonly attribute Request request;
-};
-
-[Exposed=(Window,Worker)]
 interface BackgroundFetchActiveFetches {
-  Promise<BackgroundFetchActiveFetch> match(RequestInfo request);
-  Promise<FrozenArray<BackgroundFetchActiveFetch>> values();
+  Promise<BackgroundFetchActiveFetch> match(RequestInfo request, optional CacheQueryOptions options);
+  Promise<sequence<BackgroundFetchActiveFetch>> matchAll(RequestInfo request, optional CacheQueryOptions options);
+  Promise<sequence<BackgroundFetchActiveFetch>> values();
 };
 
 [Exposed=(Window,Worker)]
@@ -70,7 +63,10 @@ interface BackgroundFetchActiveFetch : BackgroundFetchFetch {
   // In future this will include a fetch observer
 };
 
-// 4.4.3. BackgroundFetchEvent
+[Exposed=(Window,Worker)]
+interface BackgroundFetchFetch {
+  readonly attribute Request request;
+};
 
 [Constructor(DOMString type, BackgroundFetchEventInit init), Exposed=ServiceWorker]
 interface BackgroundFetchEvent : ExtendableEvent {
@@ -80,8 +76,6 @@ interface BackgroundFetchEvent : ExtendableEvent {
 dictionary BackgroundFetchEventInit : ExtendableEventInit {
   required DOMString id;
 };
-
-// 4.4.4. BackgroundFetchSettledEvent
 
 [Constructor(DOMString type, BackgroundFetchSettledEventInit init), Exposed=ServiceWorker]
 interface BackgroundFetchSettledEvent : BackgroundFetchEvent {
@@ -94,8 +88,9 @@ dictionary BackgroundFetchSettledEventInit : BackgroundFetchEventInit {
 
 [Exposed=ServiceWorker]
 interface BackgroundFetchSettledFetches {
-  Promise<BackgroundFetchSettledFetch> match(RequestInfo request);
-  Promise<FrozenArray<BackgroundFetchSettledFetch>> values();
+  Promise<BackgroundFetchSettledFetch> match(RequestInfo request, optional CacheQueryOptions options);
+  Promise<sequence<BackgroundFetchSettledFetch>> matchAll(RequestInfo request, optional CacheQueryOptions options);
+  Promise<sequence<BackgroundFetchSettledFetch>> values();
 };
 
 [Exposed=ServiceWorker]
@@ -103,14 +98,10 @@ interface BackgroundFetchSettledFetch : BackgroundFetchFetch {
   readonly attribute Response? response;
 };
 
-// 4.4.5. BackgroundFetchUpdateEvent
-
 [Constructor(DOMString type, BackgroundFetchSettledEventInit init), Exposed=ServiceWorker]
 interface BackgroundFetchUpdateEvent : BackgroundFetchSettledEvent {
   Promise<void> updateUI(DOMString title);
 };
-
-// 4.4.6. BackgroundFetchClickEvent
 
 [Constructor(DOMString type, BackgroundFetchClickEventInit init), Exposed=ServiceWorker]
 interface BackgroundFetchClickEvent : BackgroundFetchEvent {
