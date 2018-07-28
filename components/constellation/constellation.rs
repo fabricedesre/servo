@@ -2069,7 +2069,7 @@ where
     ) {
         // FIXME: Servonk WebView Hack.
         let parent_info = self.pipelines.get(&pipeline_id).and_then(|p| p.parent_info);
-        if parent_info.is_none() || &format!("{}", parent_info.unwrap()) == "(0,1)" {
+        if parent_info.is_none() || &format!("{}", parent_info.unwrap()) == "(0,1)"
         {
             // Notify embedder top level document started loading.
             self.embedder_proxy
