@@ -701,10 +701,6 @@ impl WebGLImpl {
                 ctx.gl().front_face(mode),
             WebGLCommand::DisableVertexAttribArray(attrib_id) =>
                 ctx.gl().disable_vertex_attrib_array(attrib_id),
-            WebGLCommand::DrawArrays(mode, first, count) =>
-                ctx.gl().draw_arrays(mode, first, count),
-            WebGLCommand::DrawElements(mode, count, type_, offset) =>
-                ctx.gl().draw_elements(mode, count, type_, offset as u32),
             WebGLCommand::EnableVertexAttribArray(attrib_id) =>
                 ctx.gl().enable_vertex_attrib_array(attrib_id),
             WebGLCommand::Hint(name, val) =>
@@ -932,20 +928,6 @@ impl WebGLImpl {
                 }
                 sender.send(value[0]).unwrap()
             }
-            WebGLCommand::GetShaderParameterBool(shader, param, ref sender) => {
-                let mut value = [0];
-                unsafe {
-                    ctx.gl().get_shader_iv(shader.get(), param as u32, &mut value);
-                }
-                sender.send(value[0] != 0).unwrap()
-            }
-            WebGLCommand::GetShaderParameterInt(shader, param, ref sender) => {
-                let mut value = [0];
-                unsafe {
-                    ctx.gl().get_shader_iv(shader.get(), param as u32, &mut value);
-                }
-                sender.send(value[0]).unwrap()
-            }
             WebGLCommand::GetCurrentVertexAttrib(index, ref sender) => {
                 let mut value = [0.; 4];
                 unsafe {
@@ -971,8 +953,14 @@ impl WebGLImpl {
             WebGLCommand::UseProgram(program_id) => {
                 ctx.gl().use_program(program_id.map_or(0, |p| p.get()))
             }
+            WebGLCommand::DrawArrays { mode, first, count } => {
+                ctx.gl().draw_arrays(mode, first, count)
+            }
             WebGLCommand::DrawArraysInstanced { mode, first, count, primcount } => {
                 ctx.gl().draw_arrays_instanced(mode, first, count, primcount)
+            }
+            WebGLCommand::DrawElements { mode, count, type_, offset } => {
+                ctx.gl().draw_elements(mode, count, type_, offset)
             }
             WebGLCommand::DrawElementsInstanced { mode, count, type_, offset, primcount } => {
                 ctx.gl().draw_elements_instanced(mode, count, type_, offset, primcount)

@@ -39,12 +39,12 @@ class MachCommands(CommandBase):
              category='bootstrap')
     def env(self):
         env = self.build_env()
-        print("export RUSTFLAGS=%s" % env["RUSTFLAGS"])
-        print("export PATH=%s" % env["PATH"])
+        print("export RUSTFLAGS=%s" % env.get("RUSTFLAGS", ""))
+        print("export PATH=%s" % env.get("PATH", ""))
         if sys.platform == "darwin":
-            print("export DYLD_LIBRARY_PATH=%s" % env["DYLD_LIBRARY_PATH"])
+            print("export DYLD_LIBRARY_PATH=%s" % env.get("DYLD_LIBRARY_PATH", ""))
         else:
-            print("export LD_LIBRARY_PATH=%s" % env["LD_LIBRARY_PATH"])
+            print("export LD_LIBRARY_PATH=%s" % env.get("LD_LIBRARY_PATH", ""))
 
     @Command('bootstrap',
              description='Install required packages for building.',
@@ -63,7 +63,7 @@ class MachCommands(CommandBase):
         ndk = "android-ndk-r12b-{system}-{arch}"
         tools = "sdk-tools-{system}-4333796"
 
-        sdk_build_tools = "25.0.2"
+        sdk_build_tools = "27.0.3"
         emulator_images = [
             ("servo-arm", "25", "google_apis;armeabi-v7a"),
             ("servo-x86", "28", "google_apis;x86"),
@@ -366,14 +366,15 @@ class MachCommands(CommandBase):
             elif os.path.isdir(path.join(git_db_dir, d)):
                 packages["git"][crate_name]["exist"].append(("del", d, ""))
 
-        for d in os.listdir(crates_src_dir):
-            crate_name = re.sub(r"\-\d+(\.\d+){1,3}.+", "", d)
-            if not packages["crates"].get(crate_name, False):
-                packages["crates"][crate_name] = {
-                    "current": [],
-                    "exist": [],
-                }
-            packages["crates"][crate_name]["exist"].append(d)
+        if crates_src_dir:
+            for d in os.listdir(crates_src_dir):
+                crate_name = re.sub(r"\-\d+(\.\d+){1,3}.+", "", d)
+                if not packages["crates"].get(crate_name, False):
+                    packages["crates"][crate_name] = {
+                        "current": [],
+                        "exist": [],
+                    }
+                packages["crates"][crate_name]["exist"].append(d)
 
         total_size = 0
         for packages_type in ["git", "crates"]:

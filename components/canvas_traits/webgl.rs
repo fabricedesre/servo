@@ -201,8 +201,6 @@ pub enum WebGLCommand {
     BindRenderbuffer(u32, Option<WebGLRenderbufferId>),
     BindTexture(u32, Option<WebGLTextureId>),
     DisableVertexAttribArray(u32),
-    DrawArrays(u32, i32, i32),
-    DrawElements(u32, i32, u32, i64),
     EnableVertexAttribArray(u32),
     FramebufferRenderbuffer(u32, u32, u32, Option<WebGLRenderbufferId>),
     FramebufferTexture2D(u32, u32, u32, Option<WebGLTextureId>, i32),
@@ -273,14 +271,14 @@ pub enum WebGLCommand {
     GetParameterFloat4(ParameterFloat4, WebGLSender<[f32; 4]>),
     GetProgramValidateStatus(WebGLProgramId, WebGLSender<bool>),
     GetProgramActiveUniforms(WebGLProgramId, WebGLSender<i32>),
-    GetShaderParameterBool(WebGLShaderId, ShaderParameterBool, WebGLSender<bool>),
-    GetShaderParameterInt(WebGLShaderId, ShaderParameterInt, WebGLSender<i32>),
     GetCurrentVertexAttrib(u32, WebGLSender<[f32; 4]>),
     GetTexParameterFloat(u32, TexParameterFloat, WebGLSender<f32>),
     GetTexParameterInt(u32, TexParameterInt, WebGLSender<i32>),
-    TexParameteri(u32, TexParameterInt, i32),
-    TexParameterf(u32, TexParameterFloat, f32),
+    TexParameteri(u32, u32, i32),
+    TexParameterf(u32, u32, f32),
+    DrawArrays { mode: u32, first: i32, count: i32 },
     DrawArraysInstanced { mode: u32, first: i32, count: i32, primcount: i32 },
+    DrawElements { mode: u32, count: i32, type_: u32, offset: u32 },
     DrawElementsInstanced { mode: u32, count: i32, type_: u32, offset: u32, primcount: i32 },
     VertexAttribDivisor { index: u32, divisor: u32 },
     GetUniformBool(WebGLProgramId, i32, WebGLSender<bool>),
@@ -584,25 +582,11 @@ parameters! {
 }
 
 parameters! {
-    ShaderParameter {
-        Bool(ShaderParameterBool {
-            DeleteStatus = gl::DELETE_STATUS,
-            CompileStatus = gl::COMPILE_STATUS,
-        }),
-        Int(ShaderParameterInt {
-            ShaderType = gl::SHADER_TYPE,
-        }),
-    }
-}
-
-parameters! {
     TexParameter {
         Float(TexParameterFloat {
             TextureMaxAnisotropyExt = gl::TEXTURE_MAX_ANISOTROPY_EXT,
         }),
         Int(TexParameterInt {
-            TextureMagFilter = gl::TEXTURE_MAG_FILTER,
-            TextureMinFilter = gl::TEXTURE_MIN_FILTER,
             TextureWrapS = gl::TEXTURE_WRAP_S,
             TextureWrapT = gl::TEXTURE_WRAP_T,
         }),

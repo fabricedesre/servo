@@ -13,12 +13,12 @@ test = false
 doctest = false
 
 [features]
-unstable = []
+unstable = ["packed_simd"]
 
 [dependencies]
-app_units = "0.6"
+app_units = "0.7"
 bitflags = "1.0"
-euclid = "0.18"
+euclid = "0.19"
 fnv = "1.0"
 fontsan = {git = "https://github.com/servo/fontsan"}
 gfx_traits = {path = "../gfx_traits"}
@@ -30,12 +30,13 @@ log = "0.4"
 malloc_size_of = { path = "../malloc_size_of" }
 net_traits = {path = "../net_traits"}
 new-ordered-float = "1.0"
+packed_simd = {version = "0.1", optional = true}
 range = {path = "../range"}
 serde = "1.0"
 servo_arc = {path = "../servo_arc"}
 servo_atoms = {path = "../atoms"}
 servo_url = {path = "../url"}
-smallvec = "0.6"
+smallvec = "0.6.2"
 style = {path = "../style"}
 time = "0.1.12"
 unicode-bidi = {version = "0.3", features = ["with_serde"]}
@@ -47,8 +48,8 @@ ucd = "0.1.1"
 [target.'cfg(target_os = "macos")'.dependencies]
 byteorder = "1.0"
 core-foundation = "0.6"
-core-graphics = "0.14"
-core-text = "10.0"
+core-graphics = "0.16"
+core-text = "11.0"
 
 [target.'cfg(any(target_os = "linux", target_os = "android"))'.dependencies]
 freetype = "0.4"

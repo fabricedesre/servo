@@ -4,8 +4,6 @@
 
 #![deny(unsafe_code)]
 
-#[cfg(all(target_os = "android", not(feature = "gonk")))]
-extern crate android_injected_glue;
 #[cfg(not(target_os = "android"))]
 extern crate dirs;
 extern crate embedder_traits;

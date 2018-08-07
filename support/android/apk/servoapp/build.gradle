@@ -1,0 +1,128 @@
+apply plugin: 'com.android.application'
+
+import java.util.regex.Matcher
+import java.util.regex.Pattern
+
+android {
+    compileSdkVersion 27
+    buildToolsVersion '27.0.3'
+
+    buildDir = rootDir.absolutePath + "/../../../target/gradle/servoapp"
+
+    defaultConfig {
+        applicationId "com.mozilla.servo"
+        minSdkVersion 18
+        targetSdkVersion 27
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // Share all of that with servoview
+    flavorDimensions "default"
+
+    productFlavors {
+        main {
+        }
+        googlevr {
+            minSdkVersion 21
+        }
+        oculusvr {
+            minSdkVersion 21
+        }
+    }
+
+   splits {
+       density {
+           enable false
+       }
+       abi {
+           enable false
+       }
+   }
+
+    sourceSets {
+        main {
+            java.srcDirs = ['src/main/java']
+            assets.srcDirs = ['../../../../resources']
+        }
+    }
+
+
+    buildTypes {
+        debug {
+        }
+
+        release {
+            signingConfig signingConfigs.debug // Change this to sign with a production key
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+
+        // Custom build types
+        armDebug {
+            initWith(debug)
+        }
+
+        armRelease {
+            initWith(release)
+        }
+        armv7Debug {
+            initWith(debug)
+        }
+        armv7Release {
+            initWith(release)
+        }
+        arm64Debug {
+            initWith(debug)
+        }
+        arm64Release {
+            initWith(release)
+        }
+        x86Debug {
+            initWith(debug)
+        }
+        x86Release {
+            initWith(release)
+        }
+    }
+
+    // Ignore default 'debug' and 'release' build types
+    variantFilter { variant ->
+        if(variant.buildType.name.equals('release') || variant.buildType.name.equals('debug')) {
+            variant.setIgnore(true);
+        }
+    }
+
+    project.afterEvaluate {
+        android.applicationVariants.all { variant ->
+            Pattern pattern = Pattern.compile(/^[\w\d]+([A-Z][\w\d]+)(Debug|Release)/)
+            Matcher matcher = pattern.matcher(variant.name)
+            if (!matcher.find()) {
+                throw new GradleException("Invalid variant name for output: " + variant.name)
+            }
+            def arch = matcher.group(1)
+            def debug = variant.name.contains("Debug")
+            def finalFolder = getTargetDir(debug, arch)
+            def finalFile = new File(finalFolder, "servoapp.apk")
+            variant.outputs.all { output ->
+                Task copyAndRenameAPKTask = project.task("copyAndRename${variant.name.capitalize()}APK", type: Copy) {
+                    from output.outputFile.getParent()
+                    into finalFolder
+                    include output.outputFileName
+                    rename(output.outputFileName, finalFile.getName())
+                }
+            variant.assemble.finalizedBy(copyAndRenameAPKTask)
+          }
+      }
+    }
+}
+
+dependencies {
+    implementation 'com.android.support.constraint:constraint-layout:1.1.2'
+    implementation project(':servoview')
+}

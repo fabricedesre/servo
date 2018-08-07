@@ -10,6 +10,7 @@
 # except according to those terms.
 
 import contextlib
+import json
 import os
 import signal
 import subprocess
@@ -54,16 +55,18 @@ def main(avd_name, apk_path, *args):
         check_call(adb + ["install", "-r", apk_path])
         args = list(args)
         write_user_stylesheets(adb, args)
-        write_args(adb, args)
+        write_hosts_file(adb)
 
-        check_call(adb + ["shell", "am start com.mozilla.servo/com.mozilla.servo.MainActivity"],
-                   stdout=sys.stderr)
+        json_params = shell_quote(json.dumps(args))
+        extra = "-e servoargs " + json_params
+        cmd = "am start " + extra + " com.mozilla.servo/com.mozilla.servo.MainActivity"
+        check_call(adb + ["shell", cmd], stdout=sys.stderr)
 
         # Start showing logs as soon as the application starts,
         # in case they say something useful while we wait in subsequent steps.
         logcat_args = [
             "--format=raw",  # Print no metadata, only log messages
-            "RustAndroidGlueStdouterr:D",  # Show (debug level) Rust stdio
+            "simpleservo:D",  # Show (debug level) Rust stdio
             "*:S",  # Hide everything else
         ]
         with terminate_on_exit(adb + ["logcat"] + logcat_args) as logcat:
@@ -124,16 +127,6 @@ def check_call(*args, **kwargs):
         sys.exit(exit_code)
 
 
-def write_args(adb, args):
-    data_dir = "/sdcard/Android/data/com.mozilla.servo/files"
-    params_file = data_dir + "/android_params"
-
-    check_call(adb + ["shell", "mkdir -p %s" % data_dir])
-    check_call(adb + ["shell", "echo 'servo' > %s" % params_file])
-    for arg in args:
-        check_call(adb + ["shell", "echo %s >> %s" % (shell_quote(arg), params_file)])
-
-
 def write_user_stylesheets(adb, args):
     data_dir = "/sdcard/Android/data/com.mozilla.servo/files"
     check_call(adb + ["shell", "mkdir -p %s" % data_dir])
@@ -141,6 +134,15 @@ def write_user_stylesheets(adb, args):
         remote_path = "%s/user%s.css" % (data_dir, i)
         args[pos] = remote_path
         check_call(adb + ["push", path, remote_path], stdout=sys.stderr)
+
+
+def write_hosts_file(adb):
+    hosts_file = os.environ.get("HOST_FILE")
+    if hosts_file:
+        data_dir = "/sdcard/Android/data/com.mozilla.servo/files"
+        check_call(adb + ["shell", "mkdir -p %s" % data_dir])
+        remote_path = data_dir + "/android_hosts"
+        check_call(adb + ["push", hosts_file, remote_path], stdout=sys.stderr)
 
 
 def forward_webdriver(adb, args):

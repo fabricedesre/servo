@@ -14,7 +14,7 @@ use osmesa_sys;
 use servo::compositing::windowing::{AnimationState, MouseWindowEvent, WindowEvent};
 use servo::compositing::windowing::{EmbedderCoordinates, WindowMethods};
 use servo::embedder_traits::EventLoopWaker;
-use servo::msg::constellation_msg::{Key, KeyState};
+use servo::msg::constellation_msg::{Key, KeyState, KeyModifiers};
 use servo::script_traits::TouchEventType;
 use servo::servo_config::opts;
 use servo::servo_geometry::DeviceIndependentPixel;
@@ -31,13 +31,13 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::thread;
 use std::time;
-use super::keyutils::{self, WinitKeyModifiers};
+use super::keyutils;
 #[cfg(target_os = "windows")]
 use user32;
 #[cfg(target_os = "windows")]
 use winapi;
 use winit;
-use winit::{ElementState, Event, MouseButton, MouseScrollDelta, TouchPhase, VirtualKeyCode};
+use winit::{ElementState, Event, ModifiersState, MouseButton, MouseScrollDelta, TouchPhase, VirtualKeyCode};
 use winit::dpi::{LogicalPosition, LogicalSize, PhysicalSize};
 #[cfg(target_os = "macos")]
 use winit::os::macos::{ActivationPolicy, WindowBuilderExt};
@@ -152,7 +152,7 @@ pub struct Window {
     mouse_down_point: Cell<TypedPoint2D<i32, DevicePixel>>,
     event_queue: RefCell<Vec<WindowEvent>>,
     mouse_pos: Cell<TypedPoint2D<i32, DevicePixel>>,
-    key_modifiers: Cell<WinitKeyModifiers>,
+    key_modifiers: Cell<KeyModifiers>,
     last_pressed_key: Cell<Option<Key>>,
     animation_state: Cell<AnimationState>,
     fullscreen: Cell<bool>,
@@ -284,7 +284,7 @@ impl Window {
             mouse_down_point: Cell::new(TypedPoint2D::new(0, 0)),
 
             mouse_pos: Cell::new(TypedPoint2D::new(0, 0)),
-            key_modifiers: Cell::new(WinitKeyModifiers::empty()),
+            key_modifiers: Cell::new(KeyModifiers::empty()),
 
             last_pressed_key: Cell::new(None),
             gl: gl.clone(),
@@ -305,7 +305,7 @@ impl Window {
     }
 
     pub fn page_height(&self) -> f32 {
-        let dpr = self.hidpi_factor();
+        let dpr = self.servo_hidpi_factor();
         match self.kind {
             WindowKind::Window(ref window, _) => {
                 let size = window.get_inner_size().expect("Failed to get window inner size.");
@@ -325,14 +325,14 @@ impl Window {
 
     pub fn set_inner_size(&self, size: DeviceUintSize) {
         if let WindowKind::Window(ref window, _) = self.kind {
-            let size = size.to_f32() / self.hidpi_factor();
+            let size = size.to_f32() / self.device_hidpi_factor();
             window.set_inner_size(LogicalSize::new(size.width.into(), size.height.into()))
         }
     }
 
     pub fn set_position(&self, point: DeviceIntPoint) {
         if let WindowKind::Window(ref window, _) = self.kind {
-            let point = point.to_f32() / self.hidpi_factor();
+            let point = point.to_f32() / self.device_hidpi_factor();
             window.set_position(LogicalPosition::new(point.x.into(), point.y.into()))
         }
     }
@@ -401,71 +401,59 @@ impl Window {
         }
     }
 
-    #[cfg(not(any(target_arch = "arm", target_arch = "aarch64", target_os = "android")))]
+    #[cfg(not(any(target_arch = "arm", target_arch = "aarch64")))]
     fn gl_version() -> GlRequest {
         return GlRequest::Specific(Api::OpenGl, (3, 2));
     }
 
-    #[cfg(any(target_arch = "arm", target_arch = "aarch64", target_os = "android"))]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     fn gl_version() -> GlRequest {
         GlRequest::Specific(Api::OpenGlEs, (3, 0))
     }
 
     fn handle_received_character(&self, ch: char) {
-        let modifiers = keyutils::winit_mods_to_script_mods(self.key_modifiers.get());
-        if keyutils::is_identifier_ignorable(&ch) {
-            return
-        }
-        if let Some(last_pressed_key) = self.last_pressed_key.get() {
-            let event = WindowEvent::KeyEvent(Some(ch), last_pressed_key, KeyState::Pressed, modifiers);
-            self.event_queue.borrow_mut().push(event);
+        let last_key = if let Some(key) = self.last_pressed_key.get() {
+            key
         } else {
-            // Only send the character if we can print it (by ignoring characters like backspace)
-            if !ch.is_control() {
-                match keyutils::char_to_script_key(ch) {
-                    Some(key) => {
-                        let event = WindowEvent::KeyEvent(Some(ch),
-                                                          key,
-                                                          KeyState::Pressed,
-                                                          modifiers);
-                        self.event_queue.borrow_mut().push(event);
-                    }
-                    None => {}
-                }
-            }
-        }
+            return;
+        };
+
         self.last_pressed_key.set(None);
+
+        let (key, ch) = if let Some(key) = keyutils::char_to_script_key(ch) {
+            (key, Some(ch))
+        } else {
+            (last_key, None)
+        };
+
+        let modifiers = self.key_modifiers.get();
+        let event = WindowEvent::KeyEvent(ch, key, KeyState::Pressed, modifiers);
+        self.event_queue.borrow_mut().push(event);
     }
 
-    fn toggle_keyboard_modifiers(&self, virtual_key_code: VirtualKeyCode) {
-        match virtual_key_code {
-            VirtualKeyCode::LControl => self.toggle_modifier(WinitKeyModifiers::LEFT_CONTROL),
-            VirtualKeyCode::RControl => self.toggle_modifier(WinitKeyModifiers::RIGHT_CONTROL),
-            VirtualKeyCode::LShift => self.toggle_modifier(WinitKeyModifiers::LEFT_SHIFT),
-            VirtualKeyCode::RShift => self.toggle_modifier(WinitKeyModifiers::RIGHT_SHIFT),
-            VirtualKeyCode::LAlt => self.toggle_modifier(WinitKeyModifiers::LEFT_ALT),
-            VirtualKeyCode::RAlt => self.toggle_modifier(WinitKeyModifiers::RIGHT_ALT),
-            VirtualKeyCode::LWin => self.toggle_modifier(WinitKeyModifiers::LEFT_SUPER),
-            VirtualKeyCode::RWin => self.toggle_modifier(WinitKeyModifiers::RIGHT_SUPER),
-            _ => {}
-        }
+    fn toggle_keyboard_modifiers(&self, mods: ModifiersState) {
+        self.toggle_modifier(KeyModifiers::CONTROL, mods.ctrl);
+        self.toggle_modifier(KeyModifiers::SHIFT, mods.shift);
+        self.toggle_modifier(KeyModifiers::ALT, mods.alt);
+        self.toggle_modifier(KeyModifiers::SUPER, mods.logo);
     }
 
-    fn handle_keyboard_input(&self, element_state: ElementState, virtual_key_code: VirtualKeyCode) {
-        self.toggle_keyboard_modifiers(virtual_key_code);
+    fn handle_keyboard_input(&self, element_state: ElementState, code: VirtualKeyCode, mods: ModifiersState) {
+        self.toggle_keyboard_modifiers(mods);
 
-        if let Ok(key) = keyutils::winit_key_to_script_key(virtual_key_code) {
+        if let Ok(key) = keyutils::winit_key_to_script_key(code) {
             let state = match element_state {
                 ElementState::Pressed => KeyState::Pressed,
                 ElementState::Released => KeyState::Released,
             };
-            if element_state == ElementState::Pressed {
-                if keyutils::is_printable(virtual_key_code) {
-                    self.last_pressed_key.set(Some(key));
-                }
+            if element_state == ElementState::Pressed && keyutils::is_printable(code) {
+                // If pressed and printable, we expect a ReceivedCharacter event.
+                self.last_pressed_key.set(Some(key));
+            } else {
+                self.last_pressed_key.set(None);
+                let modifiers = self.key_modifiers.get();
+                self.event_queue.borrow_mut().push(WindowEvent::KeyEvent(None, key, state, modifiers));
             }
-            let modifiers = keyutils::winit_mods_to_script_mods(self.key_modifiers.get());
-            self.event_queue.borrow_mut().push(WindowEvent::KeyEvent(None, key, state, modifiers));
         }
     }
 
@@ -478,10 +466,10 @@ impl Window {
             Event::WindowEvent {
                 event: winit::WindowEvent::KeyboardInput {
                     input: winit::KeyboardInput {
-                        state, virtual_keycode: Some(virtual_keycode), ..
+                        state, virtual_keycode: Some(virtual_keycode), modifiers, ..
                     }, ..
                 }, ..
-            } => self.handle_keyboard_input(state, virtual_keycode),
+            } => self.handle_keyboard_input(state, virtual_keycode, modifiers),
             Event::WindowEvent {
                 event: winit::WindowEvent::MouseInput {
                     state, button, ..
@@ -498,7 +486,7 @@ impl Window {
                 },
                 ..
             } => {
-                let pos = position.to_physical(self.hidpi_factor().get() as f64);
+                let pos = position.to_physical(self.device_hidpi_factor().get() as f64);
                 let (x, y): (i32, i32) = pos.into();
                 self.mouse_pos.set(TypedPoint2D::new(x, y));
                 self.event_queue.borrow_mut().push(
@@ -511,7 +499,7 @@ impl Window {
                 let (mut dx, mut dy) = match delta {
                     MouseScrollDelta::LineDelta(dx, dy) => (dx, dy * LINE_HEIGHT),
                     MouseScrollDelta::PixelDelta(position) => {
-                        let position = position.to_physical(self.hidpi_factor().get() as f64);
+                        let position = position.to_physical(self.device_hidpi_factor().get() as f64);
                         (position.x as f32, position.y as f32)
                     }
                 };
@@ -536,7 +524,7 @@ impl Window {
 
                 let phase = winit_phase_to_touch_event_type(touch.phase);
                 let id = TouchId(touch.id as i32);
-                let position = touch.location.to_physical(self.hidpi_factor().get() as f64);
+                let position = touch.location.to_physical(self.device_hidpi_factor().get() as f64);
                 let point = TypedPoint2D::new(position.x as f32, position.y as f32);
                 self.event_queue.borrow_mut().push(WindowEvent::Touch(phase, id, point));
             }
@@ -554,10 +542,10 @@ impl Window {
                 event: winit::WindowEvent::Resized(size),
                 ..
             } => {
-                // width and height are DeviceIndependentPixel.
+                // size is DeviceIndependentPixel.
                 // window.resize() takes DevicePixel.
                 if let WindowKind::Window(ref window, _) = self.kind {
-                    let size = size.to_physical(self.hidpi_factor().get() as f64);
+                    let size = size.to_physical(self.device_hidpi_factor().get() as f64);
                     window.resize(size);
                 }
                 // window.set_inner_size() takes DeviceIndependentPixel.
@@ -581,9 +569,13 @@ impl Window {
         }
     }
 
-    fn toggle_modifier(&self, modifier: WinitKeyModifiers) {
+    fn toggle_modifier(&self, modifier: KeyModifiers, pressed: bool) {
         let mut modifiers = self.key_modifiers.get();
-        modifiers.toggle(modifier);
+        if pressed {
+            modifiers.insert(modifier);
+        } else {
+            modifiers.remove(modifier);
+        }
         self.key_modifiers.set(modifiers);
     }
 
@@ -593,7 +585,7 @@ impl Window {
                     coords: TypedPoint2D<i32, DevicePixel>) {
         use servo::script_traits::MouseButton;
 
-        let max_pixel_dist = 10.0 * self.hidpi_factor().get();
+        let max_pixel_dist = 10.0 * self.servo_hidpi_factor().get();
         let event = match action {
             ElementState::Pressed => {
                 self.mouse_down_point.set(coords);
@@ -622,24 +614,27 @@ impl Window {
         self.event_queue.borrow_mut().push(WindowEvent::MouseWindowEventClass(event));
     }
 
-    fn hidpi_factor(&self) -> TypedScale<f32, DeviceIndependentPixel, DevicePixel> {
-        match opts::get().device_pixels_per_px {
-            Some(device_pixels_per_px) => TypedScale::new(device_pixels_per_px),
-            None => match opts::get().output_file {
-                Some(_) => TypedScale::new(1.0),
-                None => match self.kind {
-                    WindowKind::Window(ref window, ..) => {
-                        TypedScale::new(window.get_hidpi_factor() as f32)
-                    }
-                    WindowKind::Headless(..) => {
-                        TypedScale::new(1.0)
-                    }
-                }
+    fn device_hidpi_factor(&self) -> TypedScale<f32, DeviceIndependentPixel, DevicePixel> {
+        match self.kind {
+            WindowKind::Window(ref window, ..) => {
+                TypedScale::new(window.get_hidpi_factor() as f32)
+            }
+            WindowKind::Headless(..) => {
+                TypedScale::new(1.0)
             }
         }
     }
 
-    /// Has no effect on Android.
+    fn servo_hidpi_factor(&self) -> TypedScale<f32, DeviceIndependentPixel, DevicePixel> {
+        match opts::get().device_pixels_per_px {
+            Some(device_pixels_per_px) => TypedScale::new(device_pixels_per_px),
+            _ => match opts::get().output_file {
+                Some(_) => TypedScale::new(1.0),
+                None => self.device_hidpi_factor()
+            }
+        }
+    }
+
     pub fn set_cursor(&self, cursor: CursorKind) {
         match self.kind {
             WindowKind::Window(ref window, ..) => {
@@ -696,10 +691,10 @@ impl WindowMethods for Window {
     }
 
     fn get_coordinates(&self) -> EmbedderCoordinates {
-        let dpr = self.hidpi_factor();
         match self.kind {
             WindowKind::Window(ref window, _) => {
                 // TODO(ajeffrey): can this fail?
+                let dpr = self.device_hidpi_factor();
                 let LogicalSize { width, height } = window.get_outer_size().expect("Failed to get window outer size.");
                 let LogicalPosition { x, y } = window.get_position().unwrap_or(LogicalPosition::new(0., 0.));
                 let win_size = (TypedSize2D::new(width as f32, height as f32) * dpr).to_u32();
@@ -718,10 +713,11 @@ impl WindowMethods for Window {
                     screen: screen,
                     // FIXME: Glutin doesn't have API for available size. Fallback to screen size
                     screen_avail: screen,
-                    hidpi_factor: dpr,
+                    hidpi_factor: self.servo_hidpi_factor(),
                 }
             },
             WindowKind::Headless(ref context) => {
+                let dpr = self.servo_hidpi_factor();
                 let size = (TypedSize2D::new(context.width, context.height).to_f32() * dpr).to_u32();
                 EmbedderCoordinates {
                     viewport: DeviceUintRect::new(TypedPoint2D::zero(), size),

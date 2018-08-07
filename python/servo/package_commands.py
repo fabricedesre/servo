@@ -42,7 +42,8 @@ from servo.util import delete
 
 PACKAGES = {
     'android': [
-        'target/armv7-linux-androideabi/release/servo.apk',
+        'target/armv7-linux-androideabi/release/servoapp.apk',
+        'target/armv7-linux-androideabi/release/servoview.aar',
     ],
     'linux': [
         'target/release/servo-tech-demo.tar.gz',
@@ -214,10 +215,12 @@ class PackageCommands(CommandBase):
             if flavor is not None:
                 flavor_name = flavor.title()
 
-            task_name = "assemble" + flavor_name + build_type + build_mode
+            variant = ":assemble" + flavor_name + build_type + build_mode
+            apk_task_name = ":servoapp" + variant
+            aar_task_name = ":servoview" + variant
             try:
                 with cd(path.join("support", "android", "apk")):
-                    subprocess.check_call(["./gradlew", "--no-daemon", task_name], env=env)
+                    subprocess.check_call(["./gradlew", "--no-daemon", apk_task_name, aar_task_name], env=env)
             except subprocess.CalledProcessError as e:
                 print("Packaging Android exited with return value %d" % e.returncode)
                 return e.returncode
@@ -421,7 +424,7 @@ class PackageCommands(CommandBase):
                 return 1
 
         if android:
-            pkg_path = binary_path + ".apk"
+            pkg_path = self.get_apk_path(release)
             exec_command = [self.android_adb_path(env)]
             if emulator and usb:
                 print("Cannot install to both emulator and USB at the same time.")

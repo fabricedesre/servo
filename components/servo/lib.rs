@@ -369,7 +369,7 @@ where
             WindowEvent::SendError(ctx, e) => {
                 let msg = ConstellationMsg::SendError(ctx, e);
                 if let Err(e) = self.constellation_chan.send(msg) {
-                    warn!("Sending CloseBrowser message to constellation failed ({}).", e);
+                    warn!("Sending SendError message to constellation failed ({}).", e);
                 }
             }
         }
@@ -388,10 +388,8 @@ where
 
                 (EmbedderMsg::KeyEvent(ch, key, state, modified),
                  ShutdownState::NotShuttingDown) => {
-                    if state == KeyState::Pressed {
-                        let event = (top_level_browsing_context, EmbedderMsg::KeyEvent(ch, key, state, modified));
-                        self.embedder_events.push(event);
-                    }
+                    let event = (top_level_browsing_context, EmbedderMsg::KeyEvent(ch, key, state, modified));
+                    self.embedder_events.push(event);
                 },
 
                 (msg, ShutdownState::NotShuttingDown) => {
