@@ -8,8 +8,6 @@ extern crate euclid;
 extern crate gleam;
 extern crate glutin;
 #[macro_use] extern crate lazy_static;
-// The window backed by glutin
-#[macro_use] extern crate log;
 #[cfg(any(target_os = "linux", target_os = "macos"))] extern crate osmesa_sys;
 extern crate servo;
 #[cfg(feature = "unstable")]
@@ -21,23 +19,24 @@ extern crate winit;
 #[cfg(target_os = "windows")] extern crate winapi;
 #[cfg(target_os = "windows")] extern crate user32;
 
+// The window backed by glutin
 mod glutin_app;
+
 mod resources;
 
+mod browser;
+
 use backtrace::Backtrace;
-use servo::Servo;
+use servo::{Servo, BrowserId};
 use servo::compositing::windowing::WindowEvent;
 use servo::config::opts::{self, ArgumentParsingResult, parse_url_or_filename};
 use servo::config::servo_version;
-use servo::ipc_channel::ipc;
 use servo::servo_config::prefs::PREFS;
 use servo::servo_url::ServoUrl;
 use std::env;
 use std::panic;
 use std::process;
 use std::thread;
-
-mod browser;
 
 pub mod platform {
     #[cfg(target_os = "macos")]
@@ -150,12 +149,8 @@ pub fn main() {
     let target_url = cmdline_url.or(pref_url).or(blank_url).unwrap();
 
     let mut servo = Servo::new(window.clone());
-
-    let (sender, receiver) = ipc::channel().unwrap();
-    servo.handle_events(vec![WindowEvent::NewBrowser(target_url, sender)]);
-    let browser_id = receiver.recv().unwrap();
-    browser.set_browser_id(browser_id);
-    servo.handle_events(vec![WindowEvent::SelectBrowser(browser_id)]);
+    let browser_id = BrowserId::new();
+    servo.handle_events(vec![WindowEvent::NewBrowser(target_url, browser_id)]);
 
     servo.setup_logging();
 
