@@ -54,7 +54,8 @@ Please select your operating system:
 #### On macOS (homebrew)
 
 ``` sh
-brew install automake pkg-config python cmake yasm
+brew install automake autoconf@2.13 pkg-config python cmake yasm
+brew install gstreamer gst-plugins-base gst-plugins-good       gst-plugins-bad gst-plugins-ugly gst-libav gst-rtsp-server       --with-orc -with-libogg --with-opus --with-pango --with-theora       --with-libvorbis
 pip install virtualenv
 ```
 #### On macOS (MacPorts)
@@ -84,7 +85,7 @@ sudo apt install git curl autoconf libx11-dev \
     libssl1.0-dev libbz2-dev libosmesa6-dev libxmu6 libxmu-dev \
     libglu1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev \
     libharfbuzz-dev ccache clang \
-    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+    libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgstreamer-plugins-bad1.0-dev autoconf2.13
 ```
 
 If you using a version prior to **Ubuntu 17.04** or **Debian Sid**, replace `libssl1.0-dev` with `libssl-dev`.
@@ -102,7 +103,7 @@ sudo dnf install curl libtool gcc-c++ libXi-devel \
     freetype-devel mesa-libGL-devel mesa-libEGL-devel glib2-devel libX11-devel libXrandr-devel gperf \
     fontconfig-devel cabextract ttmkfdir python python-virtualenv python-pip expat-devel \
     rpm-build openssl-devel cmake bzip2-devel libXcursor-devel libXmu-devel mesa-libOSMesa-devel \
-    dbus-devel ncurses-devel harfbuzz-devel ccache mesa-libGLU-devel clang clang-libs
+    dbus-devel ncurses-devel harfbuzz-devel ccache mesa-libGLU-devel clang clang-libs gstreamer autoconf213
 ```
 #### On CentOS
 
@@ -146,7 +147,8 @@ sudo emerge net-misc/curl \
     media-libs/freetype media-libs/mesa dev-util/gperf \
     dev-python/virtualenv dev-python/pip dev-libs/openssl \
     media-libs/harfbuzz dev-util/ccache \
-    x11-libs/libXmu media-libs/glu x11-base/xorg-server sys-devel/clang
+    x11-libs/libXmu media-libs/glu x11-base/xorg-server sys-devel/clang \
+    media-libs/gstreamer media-libs/gst-plugins-bad media-libs/gst-plugins-base
 ```
 
 with the following environment variable set:
@@ -167,10 +169,12 @@ pip install virtualenv
 ```
  If this does not work, you may need to reboot for the changed PATH settings (by the python installer) to take effect.
 
-3. Install Git for Windows (https://git-scm.com/download/win). DO allow it to add git.exe to the PATH (default
+3. Install the most recent [GStreamer](https://gstreamer.freedesktop.org/data/pkg/windows/) development package following [these instructions](https://github.com/sdroege/gstreamer-rs#gstreamer-binaries-1).
+
+4. Install Git for Windows (https://git-scm.com/download/win). DO allow it to add git.exe to the PATH (default
 settings for the installer are fine).
 
-4. Install Visual Studio Community 2017 (https://www.visualstudio.com/vs/community/). You MUST add "Visual C++" to the
+5. Install Visual Studio Community 2017 (https://www.visualstudio.com/vs/community/). You MUST add "Visual C++" to the
 list of installed components. It is not on by default. Visual Studio 2017 MUST installed to the default location or mach.bat will not find it.
 > If you encountered errors with the environment above, do the following for a workaround:
 > 1.  Download and install [Build Tools for Visual Studio 2017](https://www.visualstudio.com/thank-you-downloading-visual-studio/?sku=BuildTools&rel=15)
@@ -279,11 +283,13 @@ Run Servo with the command:
 
 ### Keyboard Shortcuts
 
-- `Ctrl`+`-` zooms out
-- `Ctrl`+`=` zooms in
-- `Alt`+`left arrow` goes backwards in the history
-- `Alt`+`right arrow` goes forwards in the history
-- `Esc` exits servo
+- `Ctrl`+`L` opens URL prompt (`Cmd`+`L` on Mac)
+- `Ctrl`+`R` reloads current page (`Cmd`+`R` on Mac)
+- `Ctrl`+`-` zooms out (`Cmd`+`-` on Mac)
+- `Ctrl`+`=` zooms in (`Cmd`+`=` on Mac)
+- `Alt`+`left arrow` goes backwards in the history (`Cmd`+`left arrow` on Mac)
+- `Alt`+`right arrow` goes forwards in the history (`Cmd`+`right arrow` on Mac)
+- `Esc` or `Ctrl`+`Q` exits Servo (`Cmd`+`Q` on Mac)
 
 ## Developing
 

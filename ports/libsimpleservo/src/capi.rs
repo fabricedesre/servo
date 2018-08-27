@@ -145,6 +145,12 @@ pub extern "C" fn stop() {
 }
 
 #[no_mangle]
+pub extern "C" fn refresh() {
+    debug!("refresh");
+    call(|s| s.refresh());
+}
+
+#[no_mangle]
 pub extern "C" fn go_back() {
     debug!("go_back");
     call(|s| s.go_back());
@@ -172,6 +178,24 @@ pub extern "C" fn scroll_end(dx: i32, dy: i32, x: i32, y: i32) {
 pub extern "C" fn scroll(dx: i32, dy: i32, x: i32, y: i32) {
     debug!("scroll");
     call(|s| s.scroll(dx as i32, dy as i32, x as u32, y as u32));
+}
+
+#[no_mangle]
+pub extern "C" fn pinchzoom_start(factor: f32, x: i32, y: i32) {
+    debug!("pinchzoom_start");
+    call(|s| s.pinchzoom_start(factor, x as u32, y as u32));
+}
+
+#[no_mangle]
+pub extern "C" fn pinchzoom(factor: f32, x: i32, y: i32) {
+    debug!("pinchzoom");
+    call(|s| s.pinchzoom(factor, x as u32, y as u32));
+}
+
+#[no_mangle]
+pub extern "C" fn pinchzoom_end(factor: f32, x: i32, y: i32) {
+    debug!("pinchzoom_end");
+    call(|s| s.pinchzoom_end(factor, x as u32, y as u32));
 }
 
 #[no_mangle]

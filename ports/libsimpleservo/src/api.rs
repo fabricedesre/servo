@@ -208,6 +208,12 @@ impl ServoGlue {
         self.process_event(event)
     }
 
+    /// Redraw the page.
+    pub fn refresh(&mut self) -> Result<(), &'static str> {
+        info!("refresh");
+        self.process_event(WindowEvent::Refresh)
+    }
+
     /// Stop loading the page.
     pub fn stop(&mut self) -> Result<(), &'static str> {
         warn!("TODO can't stop won't stop");
@@ -278,6 +284,24 @@ impl ServoGlue {
             TouchEventType::Up,
         );
         self.process_event(event)
+    }
+
+    /// Start pinchzoom.
+    /// x/y are pinch origin coordinates.
+    pub fn pinchzoom_start(&mut self, factor: f32, _x: u32, _y: u32) -> Result<(), &'static str> {
+        self.process_event(WindowEvent::PinchZoom(factor))
+    }
+
+    /// Pinchzoom.
+    /// x/y are pinch origin coordinates.
+    pub fn pinchzoom(&mut self, factor: f32, _x: u32, _y: u32) -> Result<(), &'static str> {
+        self.process_event(WindowEvent::PinchZoom(factor))
+    }
+
+    /// End pinchzoom.
+    /// x/y are pinch origin coordinates.
+    pub fn pinchzoom_end(&mut self, factor: f32, _x: u32, _y: u32) -> Result<(), &'static str> {
+        self.process_event(WindowEvent::PinchZoom(factor))
     }
 
     /// Perform a click.

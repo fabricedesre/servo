@@ -824,9 +824,6 @@ impl Stylist {
     ///
     /// layout_parent_style is the style used for some property fixups.  It's
     /// the style of the nearest ancestor with a layout box.
-    ///
-    /// is_link should be true if we're computing style for a link; that affects
-    /// how :visited handling is done.
     pub fn cascade_style_and_visited<E>(
         &self,
         element: Option<E>,
@@ -1130,11 +1127,6 @@ impl Stylist {
         debug_assert!(pseudo_element.map_or(true, |p| !p.is_precomputed()));
 
         let rule_hash_target = element.rule_hash_target();
-
-        debug!(
-            "Determining if style is shareable: pseudo: {}",
-            pseudo_element.is_some()
-        );
 
         let matches_user_rules = rule_hash_target.matches_user_and_author_rules();
         let matches_author_rules =

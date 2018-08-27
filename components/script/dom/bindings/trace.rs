@@ -39,7 +39,6 @@ use canvas_traits::webgl::{WebGLSLVersion, WebGLSender, WebGLShaderId, WebGLText
 use canvas_traits::webgl::{WebGLVersion, WebGLVertexArrayId};
 use cssparser::RGBA;
 use devtools_traits::{CSSError, TimelineMarkerType, WorkerId};
-use dom::abstractworker::SharedRt;
 use dom::bindings::cell::DomRefCell;
 use dom::bindings::error::Error;
 use dom::bindings::refcounted::{Trusted, TrustedPromise};
@@ -77,7 +76,6 @@ use net_traits::response::{Response, ResponseBody};
 use net_traits::response::HttpsState;
 use net_traits::storage_thread::StorageType;
 use offscreen_gl_context::GLLimits;
-use parking_lot::RwLock;
 use profile_traits::mem::ProfilerChan as MemProfilerChan;
 use profile_traits::time::ProfilerChan as TimeProfilerChan;
 use script_layout_interface::OpaqueStyleAndLayoutData;
@@ -94,6 +92,7 @@ use servo_media::Backend;
 use servo_media::audio::buffer_source_node::AudioBuffer;
 use servo_media::audio::context::AudioContext;
 use servo_media::audio::graph::NodeId;
+use servo_media::audio::panner_node::{DistanceModel, PanningModel};
 use servo_media::audio::param::ParamType;
 use servo_url::{ImmutableOrigin, MutableOrigin, ServoUrl};
 use smallvec::SmallVec;
@@ -103,7 +102,7 @@ use std::hash::{BuildHasher, Hash};
 use std::ops::{Deref, DerefMut};
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{SystemTime, Instant};
@@ -397,7 +396,6 @@ unsafe_no_jsmanaged_fields!(Stylesheet);
 unsafe_no_jsmanaged_fields!(HttpsState);
 unsafe_no_jsmanaged_fields!(Request);
 unsafe_no_jsmanaged_fields!(RequestInit);
-unsafe_no_jsmanaged_fields!(SharedRt);
 unsafe_no_jsmanaged_fields!(StyleSharedRwLock);
 unsafe_no_jsmanaged_fields!(USVString);
 unsafe_no_jsmanaged_fields!(ReferrerPolicy);
@@ -437,7 +435,7 @@ unsafe_no_jsmanaged_fields!(SourceSet);
 unsafe_no_jsmanaged_fields!(AudioBuffer);
 unsafe_no_jsmanaged_fields!(AudioContext<Backend>);
 unsafe_no_jsmanaged_fields!(NodeId);
-unsafe_no_jsmanaged_fields!(ParamType);
+unsafe_no_jsmanaged_fields!(DistanceModel, PanningModel, ParamType);
 
 unsafe impl<'a> JSTraceable for &'a str {
     #[inline]
@@ -594,12 +592,6 @@ unsafe impl<U> JSTraceable for TypedSize2D<f32, U> {
     }
 }
 
-unsafe impl JSTraceable for Mutex<Option<SharedRt>> {
-    unsafe fn trace(&self, _trc: *mut JSTracer) {
-        // Do nothing.
-    }
-}
-
 unsafe impl JSTraceable for StyleLocked<FontFaceRule> {
     unsafe fn trace(&self, _trc: *mut JSTracer) {
         // Do nothing.
@@ -661,12 +653,6 @@ unsafe impl JSTraceable for StyleLocked<ViewportRule> {
 }
 
 unsafe impl JSTraceable for StyleLocked<PropertyDeclarationBlock> {
-    unsafe fn trace(&self, _trc: *mut JSTracer) {
-        // Do nothing.
-    }
-}
-
-unsafe impl JSTraceable for RwLock<SharedRt> {
     unsafe fn trace(&self, _trc: *mut JSTracer) {
         // Do nothing.
     }

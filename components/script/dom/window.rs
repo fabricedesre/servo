@@ -60,9 +60,12 @@ use euclid::{Point2D, Vector2D, Rect, Size2D, TypedPoint2D, TypedScale, TypedSiz
 use fetch;
 use ipc_channel::ipc::IpcSender;
 use ipc_channel::router::ROUTER;
-use js::jsapi::{JSAutoCompartment, JSContext};
-use js::jsapi::{JS_GC, JS_GetRuntime, JSPROP_ENUMERATE};
-use js::jsval::{JSVal, UndefinedValue};
+use js::jsapi::JSAutoCompartment;
+use js::jsapi::JSContext;
+use js::jsapi::JSPROP_ENUMERATE;
+use js::jsapi::JS_GC;
+use js::jsval::JSVal;
+use js::jsval::UndefinedValue;
 use js::rust::HandleValue;
 use js::rust::wrappers::JS_DefineProperty;
 use layout_image::fetch_image_for_layout;
@@ -595,9 +598,7 @@ impl WindowMethods for Window {
                                   obj,
                                   "opener\0".as_ptr() as *const libc::c_char,
                                   value,
-                                  JSPROP_ENUMERATE,
-                                  None,
-                                  None));
+                                  JSPROP_ENUMERATE as u32));
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-window-closed
@@ -878,7 +879,7 @@ impl WindowMethods for Window {
     #[allow(unsafe_code)]
     fn Gc(&self) {
         unsafe {
-            JS_GC(JS_GetRuntime(self.get_cx()));
+            JS_GC(self.get_cx());
         }
     }
 
@@ -1152,7 +1153,7 @@ impl Window {
     pub fn cancel_all_tasks(&self) {
         let mut ignore_flags = self.ignore_further_async_events.borrow_mut();
         for task_source_name in TaskSourceName::all() {
-            let mut flag = ignore_flags.entry(task_source_name).or_insert(Default::default());
+            let flag = ignore_flags.entry(task_source_name).or_insert(Default::default());
             let cancelled = mem::replace(&mut *flag, Default::default());
             cancelled.store(true, Ordering::Relaxed);
         }
@@ -2114,6 +2115,7 @@ impl Window {
                 this.upcast(),
                 this.upcast(),
                 message_clone.handle(),
+                None
             );
         });
         // FIXME(nox): Why are errors silenced here?

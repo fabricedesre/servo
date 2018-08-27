@@ -8,8 +8,8 @@
 // https://wicg.github.io/background-fetch/#background-fetch-manager-get
 
 promise_test(async test => {
-  const script = 'resources/sw.js';
-  const scope = 'resources/scope' + location.pathname;
+  const script = 'service_workers/sw.js';
+  const scope = 'service_workers/' + location.pathname;
 
   const serviceWorkerRegistration =
       await service_worker_unregister_and_register(test, script, scope);
@@ -41,6 +41,8 @@ backgroundFetchTest(async (test, backgroundFetch) => {
   assert_equals(registration.uploadTotal, 0);
   assert_equals(registration.uploaded, 0);
   assert_equals(registration.downloadTotal, 1234);
+  assert_equals(registration.state, "pending");
+  assert_equals(registration.failureReason, "");
   // Skip `downloaded`, as the transfer may have started already.
 
   const secondRegistration = await backgroundFetch.get(registrationId);
