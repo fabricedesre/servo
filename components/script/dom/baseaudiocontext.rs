@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use dom::analysernode::AnalyserNode;
 use dom::audiobuffer::AudioBuffer;
 use dom::audiobuffersourcenode::AudioBufferSourceNode;
 use dom::audiodestinationnode::AudioDestinationNode;
@@ -9,6 +10,7 @@ use dom::audiolistener::AudioListener;
 use dom::audionode::MAX_CHANNEL_COUNT;
 use dom::bindings::callback::ExceptionHandling;
 use dom::bindings::cell::DomRefCell;
+use dom::bindings::codegen::Bindings::AnalyserNodeBinding::AnalyserOptions;
 use dom::bindings::codegen::Bindings::AudioBufferSourceNodeBinding::AudioBufferSourceOptions;
 use dom::bindings::codegen::Bindings::AudioNodeBinding::{ChannelCountMode, ChannelInterpretation};
 use dom::bindings::codegen::Bindings::AudioNodeBinding::AudioNodeOptions;
@@ -16,6 +18,8 @@ use dom::bindings::codegen::Bindings::BaseAudioContextBinding::AudioContextState
 use dom::bindings::codegen::Bindings::BaseAudioContextBinding::BaseAudioContextMethods;
 use dom::bindings::codegen::Bindings::BaseAudioContextBinding::DecodeErrorCallback;
 use dom::bindings::codegen::Bindings::BaseAudioContextBinding::DecodeSuccessCallback;
+use dom::bindings::codegen::Bindings::BiquadFilterNodeBinding::BiquadFilterOptions;
+use dom::bindings::codegen::Bindings::ChannelMergerNodeBinding::ChannelMergerOptions;
 use dom::bindings::codegen::Bindings::GainNodeBinding::GainOptions;
 use dom::bindings::codegen::Bindings::OscillatorNodeBinding::OscillatorOptions;
 use dom::bindings::codegen::Bindings::PannerNodeBinding::PannerOptions;
@@ -25,6 +29,8 @@ use dom::bindings::num::Finite;
 use dom::bindings::refcounted::Trusted;
 use dom::bindings::reflector::DomObject;
 use dom::bindings::root::{DomRoot, MutNullableDom};
+use dom::biquadfilternode::BiquadFilterNode;
+use dom::channelmergernode::ChannelMergerNode;
 use dom::domexception::{DOMErrorName, DOMException};
 use dom::eventtarget::EventTarget;
 use dom::gainnode::GainNode;
@@ -94,14 +100,16 @@ impl BaseAudioContext {
     pub fn new_inherited(options: BaseAudioContextOptions) -> BaseAudioContext {
         let (sample_rate, channel_count) = match options {
             BaseAudioContextOptions::AudioContext(ref opt) => (opt.sample_rate, 2),
-            BaseAudioContextOptions::OfflineAudioContext(ref opt) => (opt.sample_rate, opt.channels),
+            BaseAudioContextOptions::OfflineAudioContext(ref opt) => {
+                (opt.sample_rate, opt.channels)
+            },
         };
 
         let context = BaseAudioContext {
             eventtarget: EventTarget::new_inherited(),
             audio_context_impl: ServoMedia::get()
-                                    .unwrap()
-                                    .create_audio_context(options.into()),
+                .unwrap()
+                .create_audio_context(options.into()),
             destination: Default::default(),
             listener: Default::default(),
             in_flight_resume_promises_queue: Default::default(),
@@ -308,16 +316,14 @@ impl BaseAudioContextMethods for BaseAudioContext {
     fn Listener(&self) -> DomRoot<AudioListener> {
         let global = self.global();
         let window = global.as_window();
-        self.listener.or_init(|| {
-            AudioListener::new(&window, self)
-        })
+        self.listener.or_init(|| AudioListener::new(&window, self))
     }
 
     /// https://webaudio.github.io/web-audio-api/#dom-baseaudiocontext-onstatechange
     event_handler!(statechange, GetOnstatechange, SetOnstatechange);
 
     /// https://webaudio.github.io/web-audio-api/#dom-baseaudiocontext-createoscillator
-    fn CreateOscillator(&self) -> DomRoot<OscillatorNode> {
+    fn CreateOscillator(&self) -> Fallible<DomRoot<OscillatorNode>> {
         OscillatorNode::new(
             &self.global().as_window(),
             &self,
@@ -326,7 +332,7 @@ impl BaseAudioContextMethods for BaseAudioContext {
     }
 
     /// https://webaudio.github.io/web-audio-api/#dom-baseaudiocontext-creategain
-    fn CreateGain(&self) -> DomRoot<GainNode> {
+    fn CreateGain(&self) -> Fallible<DomRoot<GainNode>> {
         GainNode::new(&self.global().as_window(), &self, &GainOptions::empty())
     }
 
@@ -335,6 +341,22 @@ impl BaseAudioContextMethods for BaseAudioContext {
         PannerNode::new(&self.global().as_window(), &self, &PannerOptions::empty())
     }
 
+    /// https://webaudio.github.io/web-audio-api/#dom-baseaudiocontext-createanalyser
+    fn CreateAnalyser(&self) -> Fallible<DomRoot<AnalyserNode>> {
+        AnalyserNode::new(&self.global().as_window(), &self, &AnalyserOptions::empty())
+    }
+
+    /// https://webaudio.github.io/web-audio-api/#dom-baseaudiocontext-createbiquadfilter
+    fn CreateBiquadFilter(&self) -> Fallible<DomRoot<BiquadFilterNode>> {
+        BiquadFilterNode::new(&self.global().as_window(), &self, &BiquadFilterOptions::empty())
+    }
+
+    /// https://webaudio.github.io/web-audio-api/#dom-baseaudiocontext-createchannelmerger
+    fn CreateChannelMerger(&self, count: u32) -> Fallible<DomRoot<ChannelMergerNode>> {
+        let mut opts = ChannelMergerOptions::empty();
+        opts.numberOfInputs = count;
+        ChannelMergerNode::new(&self.global().as_window(), &self, &opts)
+    }
 
     /// https://webaudio.github.io/web-audio-api/#dom-baseaudiocontext-createbuffer
     fn CreateBuffer(
@@ -360,7 +382,7 @@ impl BaseAudioContextMethods for BaseAudioContext {
     }
 
     // https://webaudio.github.io/web-audio-api/#dom-baseaudiocontext-createbuffersource
-    fn CreateBufferSource(&self) -> DomRoot<AudioBufferSourceNode> {
+    fn CreateBufferSource(&self) -> Fallible<DomRoot<AudioBufferSourceNode>> {
         AudioBufferSourceNode::new(
             &self.global().as_window(),
             &self,
@@ -397,6 +419,7 @@ impl BaseAudioContextMethods for BaseAudioContext {
             let audio_data = audio_data.to_vec();
             let decoded_audio = Arc::new(Mutex::new(Vec::new()));
             let decoded_audio_ = decoded_audio.clone();
+            let decoded_audio__ = decoded_audio.clone();
             let this = Trusted::new(self);
             let this_ = this.clone();
             let task_source = window.dom_manipulation_task_source();
@@ -404,15 +427,28 @@ impl BaseAudioContextMethods for BaseAudioContext {
             let canceller = window.task_canceller(TaskSourceName::DOMManipulation);
             let canceller_ = window.task_canceller(TaskSourceName::DOMManipulation);
             let callbacks = AudioDecoderCallbacks::new()
-                .eos(move || {
+                .ready(move |channel_count| {
+                    decoded_audio
+                        .lock()
+                        .unwrap()
+                        .resize(channel_count as usize, Vec::new());
+                }).progress(move |buffer, channel| {
+                    let mut decoded_audio = decoded_audio_.lock().unwrap();
+                    decoded_audio[(channel - 1) as usize].extend_from_slice((*buffer).as_ref());
+                }).eos(move || {
                     let _ = task_source.queue_with_canceller(
                         task!(audio_decode_eos: move || {
                             let this = this.root();
-                            let decoded_audio = decoded_audio.lock().unwrap();
+                            let decoded_audio = decoded_audio__.lock().unwrap();
+                            let length = if decoded_audio.len() >= 1 {
+                                decoded_audio[0].len()
+                            } else {
+                                0
+                            };
                             let buffer = AudioBuffer::new(
                                 &this.global().as_window(),
-                                1, // XXX servo-media should provide this info
-                                decoded_audio.len() as u32,
+                                decoded_audio.len() as u32 /* number of channels */,
+                                length as u32,
                                 this.sample_rate,
                                 Some(decoded_audio.as_slice()));
                             let mut resolvers = this.decode_resolvers.borrow_mut();
@@ -425,8 +461,7 @@ impl BaseAudioContextMethods for BaseAudioContext {
                         }),
                         &canceller,
                     );
-                })
-                .error(move || {
+                }).error(move || {
                     let _ = task_source_.queue_with_canceller(
                         task!(audio_decode_eos: move || {
                         let this = this_.root();
@@ -442,14 +477,7 @@ impl BaseAudioContextMethods for BaseAudioContext {
                     }),
                         &canceller_,
                     );
-                })
-                .progress(move |buffer| {
-                    decoded_audio_
-                        .lock()
-                        .unwrap()
-                        .extend_from_slice((*buffer).as_ref());
-                })
-                .build();
+                }).build();
             self.audio_context_impl
                 .decode_audio_data(audio_data, callbacks);
         } else {
@@ -466,10 +494,12 @@ impl BaseAudioContextMethods for BaseAudioContext {
 impl From<BaseAudioContextOptions> for AudioContextOptions {
     fn from(options: BaseAudioContextOptions) -> Self {
         match options {
-            BaseAudioContextOptions::AudioContext(options) =>
-                AudioContextOptions::RealTimeAudioContext(options),
-            BaseAudioContextOptions::OfflineAudioContext(options) =>
-                AudioContextOptions::OfflineAudioContext(options),
+            BaseAudioContextOptions::AudioContext(options) => {
+                AudioContextOptions::RealTimeAudioContext(options)
+            },
+            BaseAudioContextOptions::OfflineAudioContext(options) => {
+                AudioContextOptions::OfflineAudioContext(options)
+            },
         }
     }
 }

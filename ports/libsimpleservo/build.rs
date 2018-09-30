@@ -20,46 +20,29 @@ fn main() {
 
 fn android_main() {
     // Get the NDK path from NDK_HOME env.
-    let ndk_path = env::var_os("ANDROID_NDK").expect("Please set the ANDROID_NDK environment variable");
+    let ndk_path =
+        env::var_os("ANDROID_NDK").expect("Please set the ANDROID_NDK environment variable");
     let ndk_path = Path::new(&ndk_path);
 
-    let target = env::var("TARGET").unwrap();
-    let arch = if target.contains("arm") {
-        "arch-arm"
-    } else if target.contains("aarch64") {
-        "arch-arm64"
-    } else if target.contains("x86") || target.contains("i686") {
-        "arch-x86"
-    } else if target.contains("mips") {
-        "arch-mips"
-    } else {
-        panic!("Invalid target architecture {}", target);
-    };
-
-    let platform = if target.contains("aarch64") {
-        "android-21"
-    } else {
-        "android-18"
-    };
-
     // compiling android_native_app_glue.c
-    let c_file = ndk_path.join("sources").join("android").join("native_app_glue").join("android_native_app_glue.c");
-    let sysroot = ndk_path.join("platforms").join(platform).join(arch);
+    let c_file = ndk_path
+        .join("sources")
+        .join("android")
+        .join("native_app_glue")
+        .join("android_native_app_glue.c");
     cc::Build::new()
         .file(c_file)
-        .flag("--sysroot")
-        .flag(sysroot.to_str().unwrap())
         .warnings(false)
         .compile("android_native_app_glue");
 
     // Get the output directory.
-    let out_dir = env::var("OUT_DIR").expect("Cargo should have set the OUT_DIR environment variable");
+    let out_dir =
+        env::var("OUT_DIR").expect("Cargo should have set the OUT_DIR environment variable");
 
     println!("cargo:rustc-link-lib=static=android_native_app_glue");
     println!("cargo:rustc-link-search=native={}", out_dir);
     println!("cargo:rustc-link-lib=log");
     println!("cargo:rustc-link-lib=android");
-
 }
 
 fn generate_gl_bindings(target: &str) {

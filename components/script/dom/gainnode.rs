@@ -6,7 +6,6 @@ use dom::audionode::AudioNode;
 use dom::audioparam::AudioParam;
 use dom::baseaudiocontext::BaseAudioContext;
 use dom::bindings::codegen::Bindings::AudioNodeBinding::{ChannelCountMode, ChannelInterpretation};
-use dom::bindings::codegen::Bindings::AudioNodeBinding::AudioNodeOptions;
 use dom::bindings::codegen::Bindings::AudioParamBinding::AutomationRate;
 use dom::bindings::codegen::Bindings::GainNodeBinding::{self, GainNodeMethods, GainOptions};
 use dom::bindings::error::Fallible;
@@ -30,33 +29,33 @@ impl GainNode {
     pub fn new_inherited(
         window: &Window,
         context: &BaseAudioContext,
-        gain_options: &GainOptions,
-    ) -> GainNode {
-        let mut node_options = AudioNodeOptions::empty();
-        node_options.channelCount = Some(2);
-        node_options.channelCountMode = Some(ChannelCountMode::Max);
-        node_options.channelInterpretation = Some(ChannelInterpretation::Speakers);
+        options: &GainOptions,
+    ) -> Fallible<GainNode> {
+        let node_options =
+            options
+                .parent
+                .unwrap_or(2, ChannelCountMode::Max, ChannelInterpretation::Speakers);
         let node = AudioNode::new_inherited(
-            AudioNodeInit::GainNode(gain_options.into()),
+            AudioNodeInit::GainNode(options.into()),
             context,
-            &node_options,
+            node_options,
             1, // inputs
             1, // outputs
-        );
+        )?;
         let gain = AudioParam::new(
             window,
             context,
             node.node_id(),
             ParamType::Gain,
             AutomationRate::A_rate,
-            1.,       // default value
+            *options.gain,  // default value
             f32::MIN, // min value
             f32::MAX, // max value
         );
-        GainNode {
+        Ok(GainNode {
             node,
             gain: Dom::from_ref(&gain),
-        }
+        })
     }
 
     #[allow(unrooted_must_root)]
@@ -64,9 +63,13 @@ impl GainNode {
         window: &Window,
         context: &BaseAudioContext,
         options: &GainOptions,
-    ) -> DomRoot<GainNode> {
-        let node = GainNode::new_inherited(window, context, options);
-        reflect_dom_object(Box::new(node), window, GainNodeBinding::Wrap)
+    ) -> Fallible<DomRoot<GainNode>> {
+        let node = GainNode::new_inherited(window, context, options)?;
+        Ok(reflect_dom_object(
+            Box::new(node),
+            window,
+            GainNodeBinding::Wrap,
+        ))
     }
 
     pub fn Constructor(
@@ -74,7 +77,7 @@ impl GainNode {
         context: &BaseAudioContext,
         options: &GainOptions,
     ) -> Fallible<DomRoot<GainNode>> {
-        Ok(GainNode::new(window, context, options))
+        GainNode::new(window, context, options)
     }
 }
 

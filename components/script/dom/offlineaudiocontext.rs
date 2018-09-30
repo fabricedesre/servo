@@ -41,17 +41,14 @@ pub struct OfflineAudioContext {
 
 impl OfflineAudioContext {
     #[allow(unrooted_must_root)]
-    fn new_inherited(channel_count: u32,
-                     length: u32,
-                     sample_rate: f32) -> OfflineAudioContext {
+    fn new_inherited(channel_count: u32, length: u32, sample_rate: f32) -> OfflineAudioContext {
         let options = ServoMediaOfflineAudioContextOptions {
             channels: channel_count as u8,
             length: length as usize,
             sample_rate,
         };
-        let context = BaseAudioContext::new_inherited(
-            BaseAudioContextOptions::OfflineAudioContext(options),
-        );
+        let context =
+            BaseAudioContext::new_inherited(BaseAudioContextOptions::OfflineAudioContext(options));
         OfflineAudioContext {
             context,
             channel_count,
@@ -62,19 +59,38 @@ impl OfflineAudioContext {
     }
 
     #[allow(unrooted_must_root)]
-    fn new(window: &Window,
-           channel_count: u32,
-           length: u32,
-           sample_rate: f32) -> DomRoot<OfflineAudioContext> {
+    fn new(
+        window: &Window,
+        channel_count: u32,
+        length: u32,
+        sample_rate: f32,
+    ) -> Fallible<DomRoot<OfflineAudioContext>> {
+        if channel_count > MAX_CHANNEL_COUNT ||
+            channel_count <= 0 ||
+            length <= 0 ||
+            sample_rate < MIN_SAMPLE_RATE ||
+            sample_rate > MAX_SAMPLE_RATE
+        {
+            return Err(Error::NotSupported);
+        }
         let context = OfflineAudioContext::new_inherited(channel_count, length, sample_rate);
-        reflect_dom_object(Box::new(context), window, OfflineAudioContextBinding::Wrap)
+        Ok(reflect_dom_object(
+            Box::new(context),
+            window,
+            OfflineAudioContextBinding::Wrap,
+        ))
     }
 
     pub fn Constructor(
         window: &Window,
         options: &OfflineAudioContextOptions,
     ) -> Fallible<DomRoot<OfflineAudioContext>> {
-        Ok(OfflineAudioContext::new(window, options.numberOfChannels, options.length, *options.sampleRate))
+        OfflineAudioContext::new(
+            window,
+            options.numberOfChannels,
+            options.length,
+            *options.sampleRate,
+        )
     }
 
     pub fn Constructor_(
@@ -83,16 +99,7 @@ impl OfflineAudioContext {
         length: u32,
         sample_rate: Finite<f32>,
     ) -> Fallible<DomRoot<OfflineAudioContext>> {
-        if number_of_channels > MAX_CHANNEL_COUNT ||
-            number_of_channels <= 0 ||
-            length <= 0 ||
-            *sample_rate < MIN_SAMPLE_RATE ||
-            *sample_rate > MAX_SAMPLE_RATE
-        {
-            return Err(Error::NotSupported);
-        }
-
-        Ok(OfflineAudioContext::new(window, number_of_channels, length, *sample_rate))
+        OfflineAudioContext::new(window, number_of_channels, length, *sample_rate)
     }
 }
 
@@ -144,6 +151,10 @@ impl OfflineAudioContextMethods for OfflineAudioContext {
                     task!(resolve: move || {
                         let this = this.root();
                         let processed_audio = processed_audio.lock().unwrap();
+                        let processed_audio: Vec<_> = processed_audio
+                            .chunks(this.length as usize)
+                            .map(|channel| channel.to_vec())
+                            .collect();
                         let buffer = AudioBuffer::new(
                             &this.global().as_window(),
                             this.channel_count,

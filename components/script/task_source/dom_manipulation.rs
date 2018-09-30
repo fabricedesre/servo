@@ -11,9 +11,9 @@ use msg::constellation_msg::PipelineId;
 use script_runtime::{CommonScriptMsg, ScriptThreadEventCategory};
 use script_thread::MainThreadScriptMsg;
 use servo_atoms::Atom;
+use servo_channel::Sender;
 use std::fmt;
 use std::result::Result;
-use std::sync::mpsc::Sender;
 use task::{TaskCanceller, TaskOnce};
 use task_source::{TaskSource, TaskSourceName};
 
@@ -27,32 +27,31 @@ impl fmt::Debug for DOMManipulationTaskSource {
 }
 
 impl TaskSource for DOMManipulationTaskSource {
-     const NAME: TaskSourceName = TaskSourceName::DOMManipulation;
+    const NAME: TaskSourceName = TaskSourceName::DOMManipulation;
 
-    fn queue_with_canceller<T>(
-        &self,
-        task: T,
-        canceller: &TaskCanceller,
-    ) -> Result<(), ()>
+    fn queue_with_canceller<T>(&self, task: T, canceller: &TaskCanceller) -> Result<(), ()>
     where
         T: TaskOnce + 'static,
     {
         let msg = MainThreadScriptMsg::Common(CommonScriptMsg::Task(
             ScriptThreadEventCategory::ScriptEvent,
             Box::new(canceller.wrap_task(task)),
-            Some(self.1)
+            Some(self.1),
+            DOMManipulationTaskSource::NAME,
         ));
         self.0.send(msg).map_err(|_| ())
     }
 }
 
 impl DOMManipulationTaskSource {
-    pub fn queue_event(&self,
-                       target: &EventTarget,
-                       name: Atom,
-                       bubbles: EventBubbles,
-                       cancelable: EventCancelable,
-                       window: &Window) {
+    pub fn queue_event(
+        &self,
+        target: &EventTarget,
+        name: Atom,
+        bubbles: EventBubbles,
+        cancelable: EventCancelable,
+        window: &Window,
+    ) {
         let target = Trusted::new(target);
         let task = EventTask {
             target: target,

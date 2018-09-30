@@ -14,6 +14,7 @@ import android.app.Activity;
 public class JNIServo {
     JNIServo() {
         System.loadLibrary("c++_shared");
+        System.loadLibrary("gstreamer_android");
         System.loadLibrary("simpleservo");
     }
 
@@ -22,8 +23,10 @@ public class JNIServo {
     public native void init(Activity activity,
                             String args,
                             String url,
+                            String logstr,
                             Callbacks callbacks,
-                            int width, int height, boolean log);
+                            int width, int height, float density,
+                            boolean log);
 
     public native void setBatchMode(boolean mode);
 

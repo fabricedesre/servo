@@ -2,7 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-
 pub mod dom_manipulation;
 pub mod file_reading;
 pub mod history_traversal;
@@ -10,6 +9,7 @@ pub mod networking;
 pub mod performance_timeline;
 pub mod remote_event;
 pub mod user_interaction;
+pub mod websocket;
 
 use dom::globalscope::GlobalScope;
 use enum_iterator::IntoEnumIterator;
@@ -20,7 +20,7 @@ use task::{TaskCanceller, TaskOnce};
 // Note: When adding a task source, update this enum.
 // Note: The HistoryTraversalTaskSource is not part of this,
 // because it doesn't implement TaskSource.
-#[derive(Eq, Hash, IntoEnumIterator, JSTraceable, PartialEq)]
+#[derive(Clone, Eq, Hash, IntoEnumIterator, JSTraceable, PartialEq)]
 pub enum TaskSourceName {
     DOMManipulation,
     FileReading,
@@ -28,7 +28,8 @@ pub enum TaskSourceName {
     Networking,
     PerformanceTimeline,
     UserInteraction,
-    RemoteEvent
+    RemoteEvent,
+    Websocket,
 }
 
 impl TaskSourceName {
@@ -40,11 +41,7 @@ impl TaskSourceName {
 pub trait TaskSource {
     const NAME: TaskSourceName;
 
-    fn queue_with_canceller<T>(
-        &self,
-        task: T,
-        canceller: &TaskCanceller,
-    ) -> Result<(), ()>
+    fn queue_with_canceller<T>(&self, task: T, canceller: &TaskCanceller) -> Result<(), ()>
     where
         T: TaskOnce + 'static;
 

@@ -2894,6 +2894,11 @@ IdlInterface.prototype.do_interface_attribute_asserts = function(obj, member, a_
     // value 0."
     assert_equals(desc.get.length, 0, "getter length must be 0");
 
+    // "Let name be the string "get " prepended to attribute’s identifier."
+    // "Perform ! SetFunctionName(F, name)."
+    assert_equals(desc.get.name, "get " + member.name,
+        "getter must have the name 'get " + member.name + "'");
+
 
     // TODO: Test calling setter on the interface prototype (should throw
     // TypeError in most cases).
@@ -2934,6 +2939,11 @@ IdlInterface.prototype.do_interface_attribute_asserts = function(obj, member, a_
         // "The value of the Function object’s “length” property is the Number
         // value 1."
         assert_equals(desc.set.length, 1, "setter length must be 1");
+
+        // "Let name be the string "set " prepended to id."
+        // "Perform ! SetFunctionName(F, name)."
+        assert_equals(desc.set.name, "set " + member.name,
+            "The attribute setter must have the name 'set " + member.name + "'");
     }
 
     Promise.all(pendingPromises).then(a_test.done.bind(a_test));
@@ -3241,7 +3251,11 @@ function idl_test(srcs, deps, idl_setup_func) {
  * fetch_spec is a shorthand for a Promise that fetches the spec's content.
  */
 function fetch_spec(spec) {
-    return fetch('/interfaces/' + spec + '.idl').then(function (r) {
+    var url = '/interfaces/' + spec + '.idl';
+    return fetch(url).then(function (r) {
+        if (!r.ok) {
+            throw new IdlHarnessError("Error fetching " + url + ".");
+        }
         return r.text();
     });
 }

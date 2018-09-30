@@ -1,9 +1,8 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
-use dom::audionode::AudioNode;
+use dom::audionode::{AudioNode, UnwrappedAudioNodeOptions};
 use dom::baseaudiocontext::BaseAudioContext;
-use dom::bindings::codegen::Bindings::AudioNodeBinding::AudioNodeOptions;
 use dom::bindings::codegen::Bindings::AudioScheduledSourceNodeBinding::AudioScheduledSourceNodeMethods;
 use dom::bindings::error::{Error, Fallible};
 use dom::bindings::inheritance::Castable;
@@ -24,24 +23,25 @@ pub struct AudioScheduledSourceNode {
 }
 
 impl AudioScheduledSourceNode {
+    #[allow(unrooted_must_root)]
     pub fn new_inherited(
         node_type: AudioNodeInit,
         context: &BaseAudioContext,
-        options: &AudioNodeOptions,
+        options: UnwrappedAudioNodeOptions,
         number_of_inputs: u32,
         number_of_outputs: u32,
-    ) -> AudioScheduledSourceNode {
-        AudioScheduledSourceNode {
+    ) -> Fallible<AudioScheduledSourceNode> {
+        Ok(AudioScheduledSourceNode {
             node: AudioNode::new_inherited(
                 node_type,
                 context,
                 options,
                 number_of_inputs,
                 number_of_outputs,
-            ),
+            )?,
             started: Cell::new(false),
             stopped: Cell::new(false),
-        }
+        })
     }
 
     pub fn node(&self) -> &AudioNode {
@@ -59,6 +59,10 @@ impl AudioScheduledSourceNodeMethods for AudioScheduledSourceNode {
 
     // https://webaudio.github.io/web-audio-api/#dom-audioscheduledsourcenode-start
     fn Start(&self, when: Finite<f64>) -> Fallible<()> {
+        if *when < 0. {
+            return Err(Error::Range("'when' must be a positive value".to_owned()));
+        }
+
         if self.started.get() || self.stopped.get() {
             return Err(Error::InvalidState);
         }
@@ -84,9 +88,10 @@ impl AudioScheduledSourceNodeMethods for AudioScheduledSourceNode {
             );
         });
 
-        self.node().message(
-            AudioNodeMessage::AudioScheduledSourceNode(
-                AudioScheduledSourceNodeMessage::RegisterOnEndedCallback(callback)));
+        self.node()
+            .message(AudioNodeMessage::AudioScheduledSourceNode(
+                AudioScheduledSourceNodeMessage::RegisterOnEndedCallback(callback),
+            ));
 
         self.started.set(true);
         self.node
@@ -98,6 +103,10 @@ impl AudioScheduledSourceNodeMethods for AudioScheduledSourceNode {
 
     // https://webaudio.github.io/web-audio-api/#dom-audioscheduledsourcenode-stop
     fn Stop(&self, when: Finite<f64>) -> Fallible<()> {
+        if *when < 0. {
+            return Err(Error::Range("'when' must be a positive value".to_owned()));
+        }
+
         if !self.started.get() {
             return Err(Error::InvalidState);
         }

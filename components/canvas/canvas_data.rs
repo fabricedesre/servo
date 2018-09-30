@@ -11,7 +11,7 @@ use azure::azure_hl::SurfacePattern;
 use canvas_traits::canvas::*;
 use cssparser::RGBA;
 use euclid::{Transform2D, Point2D, Vector2D, Rect, Size2D};
-use ipc_channel::ipc::IpcSender;
+use ipc_channel::ipc::{IpcBytesSender, IpcSender};
 use num_traits::ToPrimitive;
 use serde_bytes::ByteBuf;
 use std::mem;
@@ -83,21 +83,6 @@ impl<'a> CanvasData<'a> {
         } else {
             writer(&self.drawtarget);
         }
-    }
-
-    pub fn draw_image_self(
-        &self,
-        image_size: Size2D<f64>,
-        dest_rect: Rect<f64>,
-        source_rect: Rect<f64>,
-        smoothing_enabled: bool
-    ) {
-        // Reads pixels from source image
-        // In this case source and target are the same canvas
-        let image_data = self.read_pixels(source_rect.to_i32(), image_size);
-
-        // The dimensions of image_data are source_rect.size
-        self.draw_image(image_data, source_rect.size, dest_rect, source_rect, smoothing_enabled);
     }
 
     pub fn save_context_state(&mut self) {
@@ -405,64 +390,61 @@ impl<'a> CanvasData<'a> {
         }
     }
 
+    #[allow(unsafe_code)]
     pub fn send_pixels(&mut self, chan: IpcSender<Option<ByteBuf>>) {
-        self.drawtarget.snapshot().get_data_surface().with_data(|element| {
-            chan.send(Some(Vec::from(element).into())).unwrap();
-        })
+        let data = unsafe { self.drawtarget.snapshot().get_data_surface().data().to_vec() };
+        chan.send(Some(data.into())).unwrap();
     }
 
+    #[allow(unsafe_code)]
     pub fn send_data(&mut self, chan: IpcSender<CanvasImageData>) {
-        self.drawtarget.snapshot().get_data_surface().with_data(|element| {
-            let size = self.drawtarget.get_size();
+        let size = self.drawtarget.get_size();
 
-            let descriptor = webrender_api::ImageDescriptor {
-                size: webrender_api::DeviceUintSize::new(size.width as u32, size.height as u32),
-                stride: None,
-                format: webrender_api::ImageFormat::BGRA8,
-                offset: 0,
-                is_opaque: false,
-                allow_mipmaps: false,
-            };
-            let data = webrender_api::ImageData::Raw(Arc::new(element.into()));
+        let descriptor = webrender_api::ImageDescriptor {
+            size: webrender_api::DeviceUintSize::new(size.width as u32, size.height as u32),
+            stride: None,
+            format: webrender_api::ImageFormat::BGRA8,
+            offset: 0,
+            is_opaque: false,
+            allow_mipmaps: false,
+        };
+        let data = webrender_api::ImageData::Raw(Arc::new(
+            unsafe { self.drawtarget.snapshot().get_data_surface().data().into() },
+        ));
 
-            let mut txn = webrender_api::Transaction::new();
+        let mut txn = webrender_api::Transaction::new();
 
-            match self.image_key {
-                Some(image_key) => {
-                    debug!("Updating image {:?}.", image_key);
-                    txn.update_image(image_key, descriptor, data, None);
-                }
-                None => {
-                    self.image_key = Some(self.webrender_api.generate_image_key());
-                    debug!("New image {:?}.", self.image_key);
-                    txn.add_image(self.image_key.unwrap(), descriptor, data, None);
-                }
+        match self.image_key {
+            Some(image_key) => {
+                debug!("Updating image {:?}.", image_key);
+                txn.update_image(image_key, descriptor, data, None);
             }
-
-            if let Some(image_key) = mem::replace(&mut self.very_old_image_key, self.old_image_key.take()) {
-                txn.delete_image(image_key);
+            None => {
+                self.image_key = Some(self.webrender_api.generate_image_key());
+                debug!("New image {:?}.", self.image_key);
+                txn.add_image(self.image_key.unwrap(), descriptor, data, None);
             }
+        }
 
-            self.webrender_api.update_resources(txn.resource_updates);
+        if let Some(image_key) = mem::replace(&mut self.very_old_image_key, self.old_image_key.take()) {
+            txn.delete_image(image_key);
+        }
 
-            let data = CanvasImageData {
-                image_key: self.image_key.unwrap(),
-            };
-            chan.send(data).unwrap();
-        })
+        self.webrender_api.update_resources(txn.resource_updates);
+
+        let data = CanvasImageData {
+            image_key: self.image_key.unwrap(),
+        };
+        chan.send(data).unwrap();
     }
 
     pub fn image_data(
         &self,
         dest_rect: Rect<i32>,
         canvas_size: Size2D<f64>,
-        chan: IpcSender<ByteBuf>,
+        sender: IpcBytesSender,
     ) {
-        let mut dest_data = self.read_pixels(dest_rect, canvas_size);
-
-        // bgra -> rgba
-        byte_swap(&mut dest_data);
-        chan.send(dest_data.into()).unwrap();
+        sender.send(&self.read_pixels(dest_rect, canvas_size)).unwrap();
     }
 
     // https://html.spec.whatwg.org/multipage/#dom-context-2d-putimagedata
@@ -610,23 +592,25 @@ impl<'a> CanvasData<'a> {
     /// It reads image data from the canvas
     /// canvas_size: The size of the canvas we're reading from
     /// read_rect: The area of the canvas we want to read from
+    #[allow(unsafe_code)]
     pub fn read_pixels(&self, read_rect: Rect<i32>, canvas_size: Size2D<f64>) -> Vec<u8> {
         let canvas_size = canvas_size.to_i32();
         let canvas_rect = Rect::new(Point2D::new(0i32, 0i32), canvas_size);
         let src_read_rect = canvas_rect.intersection(&read_rect).unwrap_or(Rect::zero());
 
-        let mut image_data = vec![];
         if src_read_rect.is_empty() || canvas_size.width <= 0 && canvas_size.height <= 0 {
-          return image_data;
+          return vec![];
         }
 
         let data_surface = self.drawtarget.snapshot().get_data_surface();
-        let mut src_data = Vec::new();
-        data_surface.with_data(|element| { src_data = element.to_vec(); });
+        let src_data = unsafe { data_surface.data() };
         let stride = data_surface.stride();
 
         //start offset of the copyable rectangle
         let mut src = (src_read_rect.origin.y * stride + src_read_rect.origin.x * 4) as usize;
+        let mut image_data = Vec::with_capacity(
+            (src_read_rect.size.width * src_read_rect.size.height * 4) as usize,
+        );
         //copy the data to the destination vector
         for _ in 0..src_read_rect.size.height {
             let row = &src_data[src .. src + (4 * src_read_rect.size.width) as usize];
@@ -733,7 +717,7 @@ fn crop_image(
 /// smoothing_enabled: It determines if smoothing is applied to the image result
 fn write_image(
     draw_target: &DrawTarget,
-    mut image_data: Vec<u8>,
+    image_data: Vec<u8>,
     image_size: Size2D<f64>,
     dest_rect: Rect<f64>,
     smoothing_enabled: bool,
@@ -744,8 +728,6 @@ fn write_image(
         return
     }
     let image_rect = Rect::new(Point2D::zero(), image_size);
-    // rgba -> bgra
-    byte_swap(&mut image_data);
 
     // From spec https://html.spec.whatwg.org/multipage/#dom-context-2d-drawimage
     // When scaling up, if the imageSmoothingEnabled attribute is set to true, the user agent should attempt

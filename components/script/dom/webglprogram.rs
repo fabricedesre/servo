@@ -14,7 +14,7 @@ use dom::bindings::root::{DomRoot, MutNullableDom};
 use dom::bindings::str::DOMString;
 use dom::webglactiveinfo::WebGLActiveInfo;
 use dom::webglobject::WebGLObject;
-use dom::webglrenderingcontext::{MAX_UNIFORM_AND_ATTRIBUTE_LEN, WebGLRenderingContext};
+use dom::webglrenderingcontext::WebGLRenderingContext;
 use dom::webglshader::WebGLShader;
 use dom::webgluniformlocation::WebGLUniformLocation;
 use dom_struct::dom_struct;
@@ -56,7 +56,10 @@ impl WebGLProgram {
     pub fn maybe_new(context: &WebGLRenderingContext) -> Option<DomRoot<Self>> {
         let (sender, receiver) = webgl_channel().unwrap();
         context.send_command(WebGLCommand::CreateProgram(sender));
-        receiver.recv().unwrap().map(|id| WebGLProgram::new(context, id))
+        receiver
+            .recv()
+            .unwrap()
+            .map(|id| WebGLProgram::new(context, id))
     }
 
     pub fn new(context: &WebGLRenderingContext, id: WebGLProgramId) -> DomRoot<Self> {
@@ -67,7 +70,6 @@ impl WebGLProgram {
         )
     }
 }
-
 
 impl WebGLProgram {
     pub fn id(&self) -> WebGLProgramId {
@@ -129,7 +131,8 @@ impl WebGLProgram {
     /// glLinkProgram
     pub fn link(&self) -> WebGLResult<()> {
         self.linked.set(false);
-        self.link_generation.set(self.link_generation.get().checked_add(1).unwrap());
+        self.link_generation
+            .set(self.link_generation.get().checked_add(1).unwrap());
         *self.active_attribs.borrow_mut() = Box::new([]);
         *self.active_uniforms.borrow_mut() = Box::new([]);
 
@@ -214,7 +217,7 @@ impl WebGLProgram {
             _ => {
                 error!("detachShader: Unexpected shader type");
                 return Err(WebGLError::InvalidValue);
-            }
+            },
         };
 
         if shader_slot.get().is_some() {
@@ -243,11 +246,11 @@ impl WebGLProgram {
         };
 
         match shader_slot.get() {
-            Some(ref attached_shader) if attached_shader.id() != shader.id() =>
-                return Err(WebGLError::InvalidOperation),
-            None =>
-                return Err(WebGLError::InvalidOperation),
-            _ => {}
+            Some(ref attached_shader) if attached_shader.id() != shader.id() => {
+                return Err(WebGLError::InvalidOperation)
+            },
+            None => return Err(WebGLError::InvalidOperation),
+            _ => {},
         }
 
         shader_slot.set(None);
@@ -265,18 +268,21 @@ impl WebGLProgram {
         if self.is_deleted() {
             return Err(WebGLError::InvalidOperation);
         }
-        if name.len() > MAX_UNIFORM_AND_ATTRIBUTE_LEN {
-            return Err(WebGLError::InvalidValue);
-        }
 
-        // Check if the name is reserved
-        if name.starts_with("gl_") || name.starts_with("webgl") || name.starts_with("_webgl_") {
+        if !validate_glsl_name(&name)? {
+            return Ok(());
+        }
+        if name.starts_with("gl_") {
             return Err(WebGLError::InvalidOperation);
         }
 
         self.upcast::<WebGLObject>()
             .context()
-            .send_command(WebGLCommand::BindAttribLocation(self.id, index, name.into()));
+            .send_command(WebGLCommand::BindAttribLocation(
+                self.id,
+                index,
+                name.into(),
+            ));
         Ok(())
     }
 
@@ -285,7 +291,9 @@ impl WebGLProgram {
             return Err(WebGLError::InvalidValue);
         }
         let uniforms = self.active_uniforms.borrow();
-        let data = uniforms.get(index as usize).ok_or(WebGLError::InvalidValue)?;
+        let data = uniforms
+            .get(index as usize)
+            .ok_or(WebGLError::InvalidValue)?;
         Ok(WebGLActiveInfo::new(
             self.global().as_window(),
             data.size.unwrap_or(1),
@@ -300,7 +308,9 @@ impl WebGLProgram {
             return Err(WebGLError::InvalidValue);
         }
         let attribs = self.active_attribs.borrow();
-        let data = attribs.get(index as usize).ok_or(WebGLError::InvalidValue)?;
+        let data = attribs
+            .get(index as usize)
+            .ok_or(WebGLError::InvalidValue)?;
         Ok(WebGLActiveInfo::new(
             self.global().as_window(),
             data.size,
@@ -314,21 +324,16 @@ impl WebGLProgram {
         if !self.is_linked() || self.is_deleted() {
             return Err(WebGLError::InvalidOperation);
         }
-        if name.len() > MAX_UNIFORM_AND_ATTRIBUTE_LEN {
-            return Err(WebGLError::InvalidValue);
-        }
 
-        // Check if the name is reserved
+        if !validate_glsl_name(&name)? {
+            return Ok(-1);
+        }
         if name.starts_with("gl_") {
             return Ok(-1);
         }
 
-        // https://www.khronos.org/registry/webgl/specs/latest/1.0/#GLSL_CONSTRUCTS
-        if name.starts_with("webgl_") || name.starts_with("_webgl_") {
-            return Ok(-1);
-        }
-
-        let location = self.active_attribs
+        let location = self
+            .active_attribs
             .borrow()
             .iter()
             .find(|attrib| attrib.name == &*name)
@@ -344,17 +349,11 @@ impl WebGLProgram {
         if !self.is_linked() || self.is_deleted() {
             return Err(WebGLError::InvalidOperation);
         }
-        if name.len() > MAX_UNIFORM_AND_ATTRIBUTE_LEN {
-            return Err(WebGLError::InvalidValue);
-        }
 
-        // Check if the name is reserved
-        if name.starts_with("gl_") {
+        if !validate_glsl_name(&name)? {
             return Ok(None);
         }
-
-        // https://www.khronos.org/registry/webgl/specs/latest/1.0/#GLSL_CONSTRUCTS
-        if name.starts_with("webgl_") || name.starts_with("_webgl_") {
+        if name.starts_with("gl_") {
             return Ok(None);
         }
 
@@ -365,10 +364,16 @@ impl WebGLProgram {
             };
 
             let uniforms = self.active_uniforms.borrow();
-            match uniforms.iter().find(|attrib| &*attrib.base_name == base_name) {
-                Some(uniform) if array_index.is_none() || array_index < uniform.size => {
-                    (uniform.size.map(|size| size - array_index.unwrap_or_default()), uniform.type_)
-                },
+            match uniforms
+                .iter()
+                .find(|attrib| &*attrib.base_name == base_name)
+            {
+                Some(uniform) if array_index.is_none() || array_index < uniform.size => (
+                    uniform
+                        .size
+                        .map(|size| size - array_index.unwrap_or_default()),
+                    uniform.type_,
+                ),
                 _ => return Ok(None),
             }
         };
@@ -376,7 +381,11 @@ impl WebGLProgram {
         let (sender, receiver) = webgl_channel().unwrap();
         self.upcast::<WebGLObject>()
             .context()
-            .send_command(WebGLCommand::GetUniformLocation(self.id, name.into(), sender));
+            .send_command(WebGLCommand::GetUniformLocation(
+                self.id,
+                name.into(),
+                sender,
+            ));
         let location = receiver.recv().unwrap();
 
         Ok(Some(WebGLUniformLocation::new(
@@ -392,12 +401,12 @@ impl WebGLProgram {
     /// glGetProgramInfoLog
     pub fn get_info_log(&self) -> WebGLResult<String> {
         if self.is_deleted() {
-            return Err(WebGLError::InvalidOperation);
+            return Err(WebGLError::InvalidValue);
         }
         if self.link_called.get() {
             let shaders_compiled = match (self.fragment_shader.get(), self.vertex_shader.get()) {
                 (Some(fs), Some(vs)) => fs.successfully_compiled() && vs.successfully_compiled(),
-                _ => false
+                _ => false,
             };
             if !shaders_compiled {
                 return Ok("One or more shaders failed to compile".to_string());
@@ -414,13 +423,15 @@ impl WebGLProgram {
         if self.marked_for_deletion.get() {
             return Err(WebGLError::InvalidValue);
         }
-        Ok(match (self.vertex_shader.get(), self.fragment_shader.get()) {
-            (Some(vertex_shader), Some(fragment_shader)) => {
-                vec![vertex_shader, fragment_shader]
-            }
-            (Some(shader), None) | (None, Some(shader)) => vec![shader],
-            (None, None) => vec![]
-        })
+        Ok(
+            match (self.vertex_shader.get(), self.fragment_shader.get()) {
+                (Some(vertex_shader), Some(fragment_shader)) => {
+                    vec![vertex_shader, fragment_shader]
+                },
+                (Some(shader), None) | (None, Some(shader)) => vec![shader],
+                (None, None) => vec![],
+            },
+        )
     }
 
     pub fn link_generation(&self) -> u64 {
@@ -435,12 +446,71 @@ impl Drop for WebGLProgram {
     }
 }
 
+fn validate_glsl_name(name: &str) -> WebGLResult<bool> {
+    if name.is_empty() {
+        return Ok(false);
+    }
+    if name.len() > MAX_UNIFORM_AND_ATTRIBUTE_LEN {
+        return Err(WebGLError::InvalidValue);
+    }
+    for c in name.chars() {
+        validate_glsl_char(c)?;
+    }
+    if name.starts_with("webgl_") || name.starts_with("_webgl_") {
+        return Err(WebGLError::InvalidOperation);
+    }
+    Ok(true)
+}
+
+fn validate_glsl_char(c: char) -> WebGLResult<()> {
+    match c {
+        'a'..='z' |
+        'A'..='Z' |
+        '0'..='9' |
+        ' ' |
+        '\t' |
+        '\u{11}' |
+        '\u{12}' |
+        '\r' |
+        '\n' |
+        '_' |
+        '.' |
+        '+' |
+        '-' |
+        '/' |
+        '*' |
+        '%' |
+        '<' |
+        '>' |
+        '[' |
+        ']' |
+        '(' |
+        ')' |
+        '{' |
+        '}' |
+        '^' |
+        '|' |
+        '&' |
+        '~' |
+        '=' |
+        '!' |
+        ':' |
+        ';' |
+        ',' |
+        '?' => Ok(()),
+        _ => Err(WebGLError::InvalidValue),
+    }
+}
 
 fn parse_uniform_name(name: &str) -> Option<(&str, Option<i32>)> {
     if !name.ends_with(']') {
         return Some((name, None));
     }
     let bracket_pos = name[..name.len() - 1].rfind('[')?;
-    let index = name[(bracket_pos + 1)..(name.len() - 1)].parse::<i32>().ok()?;
+    let index = name[(bracket_pos + 1)..(name.len() - 1)]
+        .parse::<i32>()
+        .ok()?;
     Some((&name[..bracket_pos], Some(index)))
 }
+
+pub const MAX_UNIFORM_AND_ATTRIBUTE_LEN: usize = 256;

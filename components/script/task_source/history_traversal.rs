@@ -4,14 +4,16 @@
 
 use script_runtime::{ScriptChan, CommonScriptMsg};
 use script_thread::MainThreadScriptMsg;
-use std::sync::mpsc::Sender;
+use servo_channel::Sender;
 
 #[derive(JSTraceable)]
 pub struct HistoryTraversalTaskSource(pub Sender<MainThreadScriptMsg>);
 
 impl ScriptChan for HistoryTraversalTaskSource {
     fn send(&self, msg: CommonScriptMsg) -> Result<(), ()> {
-        self.0.send(MainThreadScriptMsg::Common(msg)).map_err(|_| ())
+        self.0
+            .send(MainThreadScriptMsg::Common(msg))
+            .map_err(|_| ())
     }
 
     fn clone(&self) -> Box<ScriptChan + Send> {

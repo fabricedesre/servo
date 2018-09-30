@@ -19,11 +19,7 @@ impl Clone for RemoteEventTaskSource {
 impl TaskSource for RemoteEventTaskSource {
     const NAME: TaskSourceName = TaskSourceName::RemoteEvent;
 
-    fn queue_with_canceller<T>(
-        &self,
-        task: T,
-        canceller: &TaskCanceller,
-    ) -> Result<(), ()>
+    fn queue_with_canceller<T>(&self, task: T, canceller: &TaskCanceller) -> Result<(), ()>
     where
         T: TaskOnce + 'static,
     {
@@ -31,6 +27,7 @@ impl TaskSource for RemoteEventTaskSource {
             ScriptThreadEventCategory::NetworkEvent,
             Box::new(canceller.wrap_task(task)),
             Some(self.1),
+            RemoteEventTaskSource::NAME,
         ))
     }
 }

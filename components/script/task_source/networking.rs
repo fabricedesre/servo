@@ -19,11 +19,7 @@ impl Clone for NetworkingTaskSource {
 impl TaskSource for NetworkingTaskSource {
     const NAME: TaskSourceName = TaskSourceName::Networking;
 
-    fn queue_with_canceller<T>(
-        &self,
-        task: T,
-        canceller: &TaskCanceller,
-    ) -> Result<(), ()>
+    fn queue_with_canceller<T>(&self, task: T, canceller: &TaskCanceller) -> Result<(), ()>
     where
         T: TaskOnce + 'static,
     {
@@ -31,6 +27,7 @@ impl TaskSource for NetworkingTaskSource {
             ScriptThreadEventCategory::NetworkEvent,
             Box::new(canceller.wrap_task(task)),
             Some(self.1),
+            NetworkingTaskSource::NAME,
         ))
     }
 }
@@ -46,6 +43,7 @@ impl NetworkingTaskSource {
             ScriptThreadEventCategory::NetworkEvent,
             Box::new(task),
             Some(self.1),
+            NetworkingTaskSource::NAME,
         ))
     }
 }

@@ -4,10 +4,9 @@
 
 #[macro_use]
 extern crate log;
+extern crate servo_channel;
 extern crate ws;
 
-use std::sync::mpsc;
-use std::sync::mpsc::channel;
 use std::thread;
 use ws::{Builder, CloseCode, Handler, Handshake};
 
@@ -15,10 +14,10 @@ enum Message {
     ShutdownServer,
 }
 
-pub struct Sender(mpsc::Sender<Message>);
+pub struct Sender(servo_channel::Sender<Message>);
 
 struct Connection {
-    sender: ws::Sender
+    sender: ws::Sender,
 }
 
 impl Handler for Connection {
@@ -38,24 +37,28 @@ impl Handler for Connection {
 
 pub fn start_server(port: u16) -> Sender {
     debug!("Starting server.");
-    let (sender, receiver) = channel();
-    thread::Builder::new().name("debugger".to_owned()).spawn(move || {
-        let socket = Builder::new().build(|sender: ws::Sender| {
-            Connection { sender: sender }
-        }).unwrap();
-        let sender = socket.broadcaster();
-        thread::Builder::new().name("debugger-websocket".to_owned()).spawn(move || {
-            socket.listen(("127.0.0.1", port)).unwrap();
-        }).expect("Thread spawning failed");
-        while let Ok(message) = receiver.recv() {
-            match message {
-                Message::ShutdownServer => {
-                    break;
+    let (sender, receiver) = servo_channel::channel();
+    thread::Builder::new()
+        .name("debugger".to_owned())
+        .spawn(move || {
+            let socket = Builder::new()
+                .build(|sender: ws::Sender| Connection { sender: sender })
+                .unwrap();
+            let sender = socket.broadcaster();
+            thread::Builder::new()
+                .name("debugger-websocket".to_owned())
+                .spawn(move || {
+                    socket.listen(("127.0.0.1", port)).unwrap();
+                }).expect("Thread spawning failed");
+            while let Some(message) = receiver.recv() {
+                match message {
+                    Message::ShutdownServer => {
+                        break;
+                    },
                 }
             }
-        }
-        sender.shutdown().unwrap();
-    }).expect("Thread spawning failed");
+            sender.shutdown().unwrap();
+        }).expect("Thread spawning failed");
     Sender(sender)
 }
 

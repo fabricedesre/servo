@@ -11,6 +11,7 @@ import android.net.Uri;
 import android.opengl.GLES31;
 import android.opengl.GLSurfaceView;
 import android.util.AttributeSet;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.Choreographer;
 import android.view.GestureDetector;
@@ -41,6 +42,7 @@ public class ServoView extends GLSurfaceView
     private Uri mInitialUri = null;
     private boolean mAnimating;
     private String mServoArgs = "";
+    private String mServoLog = "";
     private GestureDetector mGestureDetector;
     private ScaleGestureDetector mScaleGestureDetector;
 
@@ -72,8 +74,9 @@ public class ServoView extends GLSurfaceView
         initGestures(context);
     }
 
-    public void setServoArgs(String args) {
+    public void setServoArgs(String args, String log) {
         mServoArgs = args != null ? args : "";
+        mServoLog = log != null ? log : "";
     }
 
     public void reload() {
@@ -137,9 +140,13 @@ public class ServoView extends GLSurfaceView
         final boolean showLogs = true;
         int width = getWidth();
         int height = getHeight();
+        DisplayMetrics metrics = new DisplayMetrics();
+        mActivity.getWindowManager().getDefaultDisplay().getMetrics(metrics);
+        float density = metrics.density;
+
         inGLThread(() -> {
             String uri = mInitialUri == null ? null : mInitialUri.toString();
-            mServo = new Servo(this, this, mClient, mActivity, mServoArgs, uri, width, height, showLogs);
+            mServo = new Servo(this, this, mClient, mActivity, mServoArgs, uri, mServoLog, width, height, density, showLogs);
         });
     }
 

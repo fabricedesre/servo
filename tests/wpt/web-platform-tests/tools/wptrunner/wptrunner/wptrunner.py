@@ -47,6 +47,7 @@ def get_loader(test_paths, product, debug=None, run_info_extras=None, **kwargs):
 
     run_info = wpttest.get_run_info(kwargs["run_info"], product,
                                     browser_version=kwargs.get("browser_version"),
+                                    browser_channel=kwargs.get("browser_channel"),
                                     debug=debug,
                                     extras=run_info_extras)
 
@@ -122,6 +123,8 @@ def get_pause_after_test(test_loader, **kwargs):
     total_tests = sum(len(item) for item in test_loader.tests.itervalues())
     if kwargs["pause_after_test"] is None:
         if kwargs["repeat_until_unexpected"]:
+            return False
+        if kwargs["headless"]:
             return False
         if kwargs["repeat"] == 1 and kwargs["rerun"] == 1 and total_tests == 1:
             return True

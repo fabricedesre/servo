@@ -11,6 +11,7 @@ extern crate msg;
 extern crate net_traits;
 extern crate profile_traits;
 extern crate script_traits;
+extern crate servo_channel;
 extern crate servo_url;
 extern crate webrender_api;
 
@@ -28,29 +29,31 @@ use net_traits::image_cache::ImageCache;
 use profile_traits::{mem, time};
 use script_traits::{ConstellationControlMsg, LayoutControlMsg};
 use script_traits::LayoutMsg as ConstellationMsg;
+use servo_channel::{Receiver, Sender};
 use servo_url::ServoUrl;
 use std::sync::Arc;
-use std::sync::mpsc::{Receiver, Sender};
 
 // A static method creating a layout thread
 // Here to remove the compositor -> layout dependency
 pub trait LayoutThreadFactory {
     type Message;
-    fn create(id: PipelineId,
-              top_level_browsing_context_id: TopLevelBrowsingContextId,
-              url: ServoUrl,
-              is_iframe: bool,
-              chan: (Sender<Self::Message>, Receiver<Self::Message>),
-              pipeline_port: IpcReceiver<LayoutControlMsg>,
-              constellation_chan: IpcSender<ConstellationMsg>,
-              script_chan: IpcSender<ConstellationControlMsg>,
-              image_cache: Arc<ImageCache>,
-              font_cache_thread: FontCacheThread,
-              time_profiler_chan: time::ProfilerChan,
-              mem_profiler_chan: mem::ProfilerChan,
-              content_process_shutdown_chan: Option<IpcSender<()>>,
-              webrender_api_sender: webrender_api::RenderApiSender,
-              webrender_document: webrender_api::DocumentId,
-              layout_threads: usize,
-              paint_time_metrics: PaintTimeMetrics);
+    fn create(
+        id: PipelineId,
+        top_level_browsing_context_id: TopLevelBrowsingContextId,
+        url: ServoUrl,
+        is_iframe: bool,
+        chan: (Sender<Self::Message>, Receiver<Self::Message>),
+        pipeline_port: IpcReceiver<LayoutControlMsg>,
+        constellation_chan: IpcSender<ConstellationMsg>,
+        script_chan: IpcSender<ConstellationControlMsg>,
+        image_cache: Arc<ImageCache>,
+        font_cache_thread: FontCacheThread,
+        time_profiler_chan: time::ProfilerChan,
+        mem_profiler_chan: mem::ProfilerChan,
+        content_process_shutdown_chan: Option<IpcSender<()>>,
+        webrender_api_sender: webrender_api::RenderApiSender,
+        webrender_document: webrender_api::DocumentId,
+        layout_threads: usize,
+        paint_time_metrics: PaintTimeMetrics,
+    );
 }

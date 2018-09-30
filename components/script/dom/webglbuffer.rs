@@ -13,6 +13,7 @@ use dom::bindings::root::DomRoot;
 use dom::webglobject::WebGLObject;
 use dom::webglrenderingcontext::WebGLRenderingContext;
 use dom_struct::dom_struct;
+use ipc_channel::ipc;
 use std::cell::Cell;
 
 #[dom_struct]
@@ -44,7 +45,10 @@ impl WebGLBuffer {
     pub fn maybe_new(context: &WebGLRenderingContext) -> Option<DomRoot<Self>> {
         let (sender, receiver) = webgl_channel().unwrap();
         context.send_command(WebGLCommand::CreateBuffer(sender));
-        receiver.recv().unwrap().map(|id| WebGLBuffer::new(context, id))
+        receiver
+            .recv()
+            .unwrap()
+            .map(|id| WebGLBuffer::new(context, id))
     }
 
     pub fn new(context: &WebGLRenderingContext, id: WebGLBufferId) -> DomRoot<Self> {
@@ -56,16 +60,12 @@ impl WebGLBuffer {
     }
 }
 
-
 impl WebGLBuffer {
     pub fn id(&self) -> WebGLBufferId {
         self.id
     }
 
-    pub fn buffer_data<T>(&self, target: u32, data: T, usage: u32) -> WebGLResult<()>
-    where
-        T: Into<Vec<u8>>,
-    {
+    pub fn buffer_data(&self, data: &[u8], usage: u32) -> WebGLResult<()> {
         match usage {
             WebGLRenderingContextConstants::STREAM_DRAW |
             WebGLRenderingContextConstants::STATIC_DRAW |
@@ -73,17 +73,17 @@ impl WebGLBuffer {
             _ => return Err(WebGLError::InvalidEnum),
         }
 
-        if let Some(previous_target) = self.target.get() {
-            if target != previous_target {
-                return Err(WebGLError::InvalidOperation);
-            }
-        }
-        let data = data.into();
         self.capacity.set(data.len());
         self.usage.set(usage);
+        let (sender, receiver) = ipc::bytes_channel().unwrap();
         self.upcast::<WebGLObject>()
             .context()
-            .send_command(WebGLCommand::BufferData(target, data.into(), usage));
+            .send_command(WebGLCommand::BufferData(
+                self.target.get().unwrap(),
+                receiver,
+                usage,
+            ));
+        sender.send(data).unwrap();
         Ok(())
     }
 
@@ -134,13 +134,19 @@ impl WebGLBuffer {
 
     pub fn increment_attached_counter(&self) {
         self.attached_counter.set(
-            self.attached_counter.get().checked_add(1).expect("refcount overflowed"),
+            self.attached_counter
+                .get()
+                .checked_add(1)
+                .expect("refcount overflowed"),
         );
     }
 
     pub fn decrement_attached_counter(&self) {
         self.attached_counter.set(
-            self.attached_counter.get().checked_sub(1).expect("refcount underflowed"),
+            self.attached_counter
+                .get()
+                .checked_sub(1)
+                .expect("refcount underflowed"),
         );
         if self.is_deleted() {
             self.delete();
@@ -154,6 +160,7 @@ impl WebGLBuffer {
 
 impl Drop for WebGLBuffer {
     fn drop(&mut self) {
-        self.delete();
+        self.mark_for_deletion();
+        assert!(self.is_deleted());
     }
 }

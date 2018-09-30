@@ -253,6 +253,7 @@ class MachCommands(CommandBase):
             "selectors",
             "servo_config",
             "servo_remutex",
+            "servo_channel",
         ]
         if not packages:
             packages = set(os.listdir(path.join(self.context.topdir, "tests", "unit"))) - set(['.DS_Store'])
@@ -380,9 +381,10 @@ class MachCommands(CommandBase):
             binary_args=self.in_android_emulator(release, dev) + (binary_args or []),
             binary=sys.executable,
         )
-        return self._test_wpt(**kwargs)
+        return self._test_wpt(android=True, **kwargs)
 
-    def _test_wpt(self, **kwargs):
+    def _test_wpt(self, android=False, **kwargs):
+        self.set_run_env(android)
         hosts_file_path = path.join(self.context.topdir, 'tests', 'wpt', 'hosts')
         os.environ["hosts_file_path"] = hosts_file_path
         run_file = path.abspath(path.join(self.context.topdir, "tests", "wpt", "run.py"))

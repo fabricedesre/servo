@@ -33,18 +33,15 @@ impl fmt::Debug for PerformanceTimelineTaskSource {
 impl TaskSource for PerformanceTimelineTaskSource {
     const NAME: TaskSourceName = TaskSourceName::PerformanceTimeline;
 
-    fn queue_with_canceller<T>(
-        &self,
-        task: T,
-        canceller: &TaskCanceller,
-    ) -> Result<(), ()>
+    fn queue_with_canceller<T>(&self, task: T, canceller: &TaskCanceller) -> Result<(), ()>
     where
         T: TaskOnce + 'static,
     {
         let msg = CommonScriptMsg::Task(
             ScriptThreadEventCategory::PerformanceTimelineTask,
             Box::new(canceller.wrap_task(task)),
-            Some(self.1)
+            Some(self.1),
+            PerformanceTimelineTaskSource::NAME,
         );
         self.0.send(msg).map_err(|_| ())
     }

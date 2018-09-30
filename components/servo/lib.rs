@@ -46,12 +46,13 @@ pub extern crate profile;
 pub extern crate profile_traits;
 pub extern crate script;
 pub extern crate script_layout_interface;
-pub extern crate script_traits;
+pub extern crate servo_channel;
 pub extern crate servo_config;
 pub extern crate servo_geometry;
 pub extern crate servo_url;
 pub extern crate style;
 pub extern crate style_traits;
+pub extern crate script_traits;
 pub extern crate webrender_api;
 pub extern crate webvr;
 pub extern crate webvr_traits;
@@ -97,13 +98,13 @@ use profile::time as profile_time;
 use profile_traits::mem;
 use profile_traits::time;
 use script_traits::{ConstellationMsg, SWManagerSenders, ScriptToConstellationChan};
+use servo_channel::{Sender, channel};
 use servo_config::opts;
 use servo_config::prefs::PREFS;
 use std::borrow::Cow;
 use std::cmp::max;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::mpsc::{channel, Sender};
 use webrender::RendererKind;
 use webvr::{WebVRCompositorHandler, WebVRThread};
 
@@ -152,7 +153,6 @@ where
             create_compositor_channel(window.create_event_loop_waker());
         let (embedder_proxy, embedder_receiver) =
             create_embedder_channel(window.create_event_loop_waker());
-        let supports_clipboard = window.supports_clipboard();
         let time_profiler_chan = profile_time::Profiler::create(
             &opts.time_profiling,
             opts.time_profiler_trace_path.clone(),
@@ -183,23 +183,28 @@ where
 
             let render_notifier = Box::new(RenderNotifier::new(compositor_proxy.clone()));
 
-            webrender::Renderer::new(window.gl(), render_notifier, webrender::RendererOptions {
-                device_pixel_ratio: coordinates.hidpi_factor.get(),
-                resource_override_path: opts.shaders_dir.clone(),
-                enable_aa: opts.enable_text_antialiasing,
-                debug_flags: debug_flags,
-                recorder: recorder,
-                precache_shaders: opts.precache_shaders,
-                enable_scrollbars: opts.output_file.is_none(),
-                renderer_kind: renderer_kind,
-                enable_subpixel_aa: opts.enable_subpixel_text_antialiasing,
-                ..Default::default()
-            }).expect("Unable to initialize webrender!")
+            webrender::Renderer::new(
+                window.gl(),
+                render_notifier,
+                webrender::RendererOptions {
+                    device_pixel_ratio: coordinates.hidpi_factor.get(),
+                    resource_override_path: opts.shaders_dir.clone(),
+                    enable_aa: opts.enable_text_antialiasing,
+                    debug_flags: debug_flags,
+                    recorder: recorder,
+                    precache_shaders: opts.precache_shaders,
+                    enable_scrollbars: opts.output_file.is_none(),
+                    renderer_kind: renderer_kind,
+                    enable_subpixel_aa: opts.enable_subpixel_text_antialiasing,
+                    ..Default::default()
+                },
+            ).expect("Unable to initialize webrender!")
         };
 
         let webrender_api = webrender_api_sender.create_api();
         let wr_document_layer = 0; //TODO
-        let webrender_document = webrender_api.add_document(coordinates.framebuffer, wr_document_layer);
+        let webrender_document =
+            webrender_api.add_document(coordinates.framebuffer, wr_document_layer);
 
         // Important that this call is done in a single-threaded fashion, we
         // can't defer it after `create_constellation` has started.
@@ -217,7 +222,6 @@ where
             mem_profiler_chan.clone(),
             debugger_chan,
             devtools_chan,
-            supports_clipboard,
             &mut webrender,
             webrender_document,
             webrender_api_sender,
@@ -259,140 +263,147 @@ where
 
     fn handle_window_event(&mut self, event: WindowEvent) {
         match event {
-            WindowEvent::Idle => {}
+            WindowEvent::Idle => {},
 
             WindowEvent::Refresh => {
                 self.compositor.composite();
-            }
+            },
 
             WindowEvent::Resize => {
                 self.compositor.on_resize_window_event();
-            }
+            },
 
             WindowEvent::LoadUrl(top_level_browsing_context_id, url) => {
                 let msg = ConstellationMsg::LoadUrl(top_level_browsing_context_id, url);
                 if let Err(e) = self.constellation_chan.send(msg) {
-                    warn!("Sending load url to constellation failed ({}).", e);
+                    warn!("Sending load url to constellation failed ({:?}).", e);
                 }
-            }
+            },
 
             WindowEvent::MouseWindowEventClass(mouse_window_event) => {
                 self.compositor
                     .on_mouse_window_event_class(mouse_window_event);
-            }
+            },
 
             WindowEvent::MouseWindowMoveEventClass(cursor) => {
                 self.compositor.on_mouse_window_move_event_class(cursor);
-            }
+            },
 
             WindowEvent::Touch(event_type, identifier, location) => {
                 self.compositor
                     .on_touch_event(event_type, identifier, location);
-            }
+            },
 
             WindowEvent::Scroll(delta, cursor, phase) => {
                 self.compositor.on_scroll_event(delta, cursor, phase);
-            }
+            },
 
             WindowEvent::Zoom(magnification) => {
                 self.compositor.on_zoom_window_event(magnification);
-            }
+            },
 
             WindowEvent::ResetZoom => {
                 self.compositor.on_zoom_reset_window_event();
-            }
+            },
 
             WindowEvent::PinchZoom(magnification) => {
                 self.compositor.on_pinch_zoom_window_event(magnification);
-            }
+            },
 
             WindowEvent::Navigation(top_level_browsing_context_id, direction) => {
                 let msg =
                     ConstellationMsg::TraverseHistory(top_level_browsing_context_id, direction);
                 if let Err(e) = self.constellation_chan.send(msg) {
-                    warn!("Sending navigation to constellation failed ({}).", e);
+                    warn!("Sending navigation to constellation failed ({:?}).", e);
                 }
-            }
+            },
 
             WindowEvent::KeyEvent(ch, key, state, modifiers) => {
                 let msg = ConstellationMsg::KeyEvent(ch, key, state, modifiers);
                 if let Err(e) = self.constellation_chan.send(msg) {
-                    warn!("Sending key event to constellation failed ({}).", e);
+                    warn!("Sending key event to constellation failed ({:?}).", e);
                 }
-            }
+            },
 
             WindowEvent::Quit => {
                 self.compositor.maybe_start_shutting_down();
-            }
+            },
 
             WindowEvent::Reload(top_level_browsing_context_id) => {
                 let msg = ConstellationMsg::Reload(top_level_browsing_context_id);
                 if let Err(e) = self.constellation_chan.send(msg) {
-                    warn!("Sending reload to constellation failed ({}).", e);
+                    warn!("Sending reload to constellation failed ({:?}).", e);
                 }
-            }
+            },
 
             WindowEvent::ToggleWebRenderDebug(option) => {
                 self.compositor.toggle_webrender_debug(option);
-            }
+            },
 
             WindowEvent::CaptureWebRender => {
                 self.compositor.capture_webrender();
-            }
+            },
 
             WindowEvent::NewBrowser(url, browser_id) => {
                 let msg = ConstellationMsg::NewBrowser(url, browser_id);
                 if let Err(e) = self.constellation_chan.send(msg) {
                     warn!(
-                        "Sending NewBrowser message to constellation failed ({}).",
+                        "Sending NewBrowser message to constellation failed ({:?}).",
                         e
                     );
                 }
-            }
+            },
 
             WindowEvent::SelectBrowser(ctx) => {
                 let msg = ConstellationMsg::SelectBrowser(ctx);
                 if let Err(e) = self.constellation_chan.send(msg) {
                     warn!(
-                        "Sending SelectBrowser message to constellation failed ({}).",
+                        "Sending SelectBrowser message to constellation failed ({:?}).",
                         e
                     );
                 }
-            }
+            },
 
             WindowEvent::CloseBrowser(ctx) => {
                 let msg = ConstellationMsg::CloseBrowser(ctx);
                 if let Err(e) = self.constellation_chan.send(msg) {
                     warn!(
-                        "Sending CloseBrowser message to constellation failed ({}).",
+                        "Sending CloseBrowser message to constellation failed ({:?}).",
                         e
                     );
                 }
-            }
+            },
 
             WindowEvent::SendError(ctx, e) => {
                 let msg = ConstellationMsg::SendError(ctx, e);
                 if let Err(e) = self.constellation_chan.send(msg) {
-                    warn!("Sending SendError message to constellation failed ({}).", e);
+                    warn!("Sending SendError message to constellation failed ({:?}).", e);
                 }
-            }
+            },
         }
     }
 
     fn receive_messages(&mut self) {
-        while let Some((top_level_browsing_context, msg)) = self.embedder_receiver.try_recv_embedder_msg() {
+        while let Some((top_level_browsing_context, msg)) =
+            self.embedder_receiver.try_recv_embedder_msg()
+        {
             match (msg, self.compositor.shutdown_state) {
                 (_, ShutdownState::FinishedShuttingDown) => {
                     error!(
                         "embedder shouldn't be handling messages after compositor has shut down"
                     );
-                }
+                },
 
                 (_, ShutdownState::ShuttingDown) => {}
 
-                (EmbedderMsg::KeyEvent(ch, key, state, modified),
-                 ShutdownState::NotShuttingDown) => {
-                    let event = (top_level_browsing_context, EmbedderMsg::KeyEvent(ch, key, state, modified));
+                (
+                    EmbedderMsg::KeyEvent(ch, key, state, modified),
+                    ShutdownState::NotShuttingDown,
+                ) => {
+                    let event = (
+                        top_level_browsing_context,
+                        EmbedderMsg::KeyEvent(ch, key, state, modified),
+                    );
                     self.embedder_events.push(event);
                 },
 
@@ -447,8 +458,9 @@ where
     }
 }
 
-fn create_embedder_channel(event_loop_waker: Box<EventLoopWaker>)
-    -> (EmbedderProxy, EmbedderReceiver) {
+fn create_embedder_channel(
+    event_loop_waker: Box<EventLoopWaker>,
+) -> (EmbedderProxy, EmbedderReceiver) {
     let (sender, receiver) = channel();
     (
         EmbedderProxy {
@@ -459,8 +471,9 @@ fn create_embedder_channel(event_loop_waker: Box<EventLoopWaker>)
     )
 }
 
-fn create_compositor_channel(event_loop_waker: Box<EventLoopWaker>)
-    -> (CompositorProxy, CompositorReceiver) {
+fn create_compositor_channel(
+    event_loop_waker: Box<EventLoopWaker>,
+) -> (CompositorProxy, CompositorReceiver) {
     let (sender, receiver) = channel();
     (
         CompositorProxy {
@@ -471,20 +484,20 @@ fn create_compositor_channel(event_loop_waker: Box<EventLoopWaker>)
     )
 }
 
-fn create_constellation(user_agent: Cow<'static, str>,
-                        config_dir: Option<PathBuf>,
-                        embedder_proxy: EmbedderProxy,
-                        compositor_proxy: CompositorProxy,
-                        time_profiler_chan: time::ProfilerChan,
-                        mem_profiler_chan: mem::ProfilerChan,
-                        debugger_chan: Option<debugger::Sender>,
-                        devtools_chan: Option<Sender<devtools_traits::DevtoolsControlMsg>>,
-                        supports_clipboard: bool,
-                        webrender: &mut webrender::Renderer,
-                        webrender_document: webrender_api::DocumentId,
-                        webrender_api_sender: webrender_api::RenderApiSender,
-                        window_gl: Rc<gl::Gl>)
-                        -> (Sender<ConstellationMsg>, SWManagerSenders) {
+fn create_constellation(
+    user_agent: Cow<'static, str>,
+    config_dir: Option<PathBuf>,
+    embedder_proxy: EmbedderProxy,
+    compositor_proxy: CompositorProxy,
+    time_profiler_chan: time::ProfilerChan,
+    mem_profiler_chan: mem::ProfilerChan,
+    debugger_chan: Option<debugger::Sender>,
+    devtools_chan: Option<Sender<devtools_traits::DevtoolsControlMsg>>,
+    webrender: &mut webrender::Renderer,
+    webrender_document: webrender_api::DocumentId,
+    webrender_api_sender: webrender_api::RenderApiSender,
+    window_gl: Rc<gl::Gl>,
+) -> (Sender<ConstellationMsg>, SWManagerSenders) {
     let bluetooth_thread: IpcSender<BluetoothRequest>;
 
     #[cfg(feature = "web-bluetooth")]
@@ -498,15 +511,18 @@ fn create_constellation(user_agent: Cow<'static, str>,
         bluetooth_thread = sender;
     }
 
-    let (public_resource_threads, private_resource_threads) =
-        new_resource_threads(user_agent,
-                             devtools_chan.clone(),
-                             time_profiler_chan.clone(),
-                             mem_profiler_chan.clone(),
-                             embedder_proxy.clone(),
-                             config_dir);
-    let font_cache_thread = FontCacheThread::new(public_resource_threads.sender(),
-                                                 webrender_api_sender.create_api());
+    let (public_resource_threads, private_resource_threads) = new_resource_threads(
+        user_agent,
+        devtools_chan.clone(),
+        time_profiler_chan.clone(),
+        mem_profiler_chan.clone(),
+        embedder_proxy.clone(),
+        config_dir,
+    );
+    let font_cache_thread = FontCacheThread::new(
+        public_resource_threads.sender(),
+        webrender_api_sender.create_api(),
+    );
 
     let resource_sender = public_resource_threads.sender();
 
@@ -533,13 +549,12 @@ fn create_constellation(user_agent: Cow<'static, str>,
 
     // Initialize WebGL Thread entry point.
     let webgl_threads = gl_factory.map(|factory| {
-        let (webgl_threads, image_handler, output_handler) =
-            WebGLThreads::new(
-                factory,
-                window_gl,
-                webrender_api_sender.clone(),
-                webvr_compositor.map(|c| c as Box<_>),
-            );
+        let (webgl_threads, image_handler, output_handler) = WebGLThreads::new(
+            factory,
+            window_gl,
+            webrender_api_sender.clone(),
+            webvr_compositor.map(|c| c as Box<_>),
+        );
 
         // Set webrender external image handler for WebGL textures
         webrender.set_external_image_handler(image_handler);
@@ -563,7 +578,6 @@ fn create_constellation(user_agent: Cow<'static, str>,
         private_resource_threads,
         time_profiler_chan,
         mem_profiler_chan,
-        supports_clipboard,
         webrender_document,
         webrender_api_sender,
         webgl_threads,
@@ -595,7 +609,11 @@ fn create_constellation(user_agent: Cow<'static, str>,
 // This should probably be in the log crate.
 struct BothLogger<Log1, Log2>(Log1, Log2);
 
-impl<Log1, Log2> Log for BothLogger<Log1, Log2> where Log1: Log, Log2: Log {
+impl<Log1, Log2> Log for BothLogger<Log1, Log2>
+where
+    Log1: Log,
+    Log2: Log,
+{
     fn enabled(&self, metadata: &Metadata) -> bool {
         self.0.enabled(metadata) || self.1.enabled(metadata)
     }

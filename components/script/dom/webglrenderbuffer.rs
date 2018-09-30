@@ -23,6 +23,7 @@ pub struct WebGLRenderbuffer {
     is_deleted: Cell<bool>,
     size: Cell<Option<(i32, i32)>>,
     internal_format: Cell<Option<u32>>,
+    is_initialized: Cell<bool>,
 }
 
 impl WebGLRenderbuffer {
@@ -34,13 +35,17 @@ impl WebGLRenderbuffer {
             is_deleted: Cell::new(false),
             internal_format: Cell::new(None),
             size: Cell::new(None),
+            is_initialized: Cell::new(false),
         }
     }
 
     pub fn maybe_new(context: &WebGLRenderingContext) -> Option<DomRoot<Self>> {
         let (sender, receiver) = webgl_channel().unwrap();
         context.send_command(WebGLCommand::CreateRenderbuffer(sender));
-        receiver.recv().unwrap().map(|id| WebGLRenderbuffer::new(context, id))
+        receiver
+            .recv()
+            .unwrap()
+            .map(|id| WebGLRenderbuffer::new(context, id))
     }
 
     pub fn new(context: &WebGLRenderingContext, id: WebGLRenderbufferId) -> DomRoot<Self> {
@@ -51,7 +56,6 @@ impl WebGLRenderbuffer {
         )
     }
 }
-
 
 impl WebGLRenderbuffer {
     pub fn id(&self) -> WebGLRenderbufferId {
@@ -66,6 +70,14 @@ impl WebGLRenderbuffer {
         self.internal_format.get().unwrap_or(constants::RGBA4)
     }
 
+    pub fn mark_initialized(&self) {
+        self.is_initialized.set(true);
+    }
+
+    pub fn is_initialized(&self) -> bool {
+        self.is_initialized.get()
+    }
+
     pub fn bind(&self, target: u32) {
         self.ever_bound.set(true);
         self.upcast::<WebGLObject>()
@@ -76,6 +88,20 @@ impl WebGLRenderbuffer {
     pub fn delete(&self) {
         if !self.is_deleted.get() {
             self.is_deleted.set(true);
+
+            /*
+            If a renderbuffer object is deleted while its image is attached to the currently
+            bound framebuffer, then it is as if FramebufferRenderbuffer had been called, with
+            a renderbuffer of 0, for each attachment point to which this image was attached
+            in the currently bound framebuffer.
+            - GLES 2.0, 4.4.3, "Attaching Renderbuffer Images to a Framebuffer"
+             */
+            let currently_bound_framebuffer =
+                self.upcast::<WebGLObject>().context().bound_framebuffer();
+            if let Some(fb) = currently_bound_framebuffer {
+                fb.detach_renderbuffer(self);
+            }
+
             self.upcast::<WebGLObject>()
                 .context()
                 .send_command(WebGLCommand::DeleteRenderbuffer(self.id));
@@ -96,9 +122,9 @@ impl WebGLRenderbuffer {
         let actual_format = match internal_format {
             constants::RGBA4 |
             constants::DEPTH_COMPONENT16 |
-            constants::STENCIL_INDEX8 |
-            // https://www.khronos.org/registry/webgl/specs/latest/1.0/#6.7
-            constants::DEPTH_STENCIL => internal_format,
+            constants::STENCIL_INDEX8 => internal_format,
+            // https://www.khronos.org/registry/webgl/specs/latest/1.0/#6.8
+            constants::DEPTH_STENCIL => WebGl2Constants::DEPTH24_STENCIL8,
             constants::RGB5_A1 => {
                 // 16-bit RGBA formats are not supported on desktop GL.
                 if is_gles() {
@@ -119,17 +145,18 @@ impl WebGLRenderbuffer {
         };
 
         self.internal_format.set(Some(internal_format));
+        self.is_initialized.set(false);
 
         // FIXME: Invalidate completeness after the call
 
-        self.upcast::<WebGLObject>().context().send_command(
-            WebGLCommand::RenderbufferStorage(
+        self.upcast::<WebGLObject>()
+            .context()
+            .send_command(WebGLCommand::RenderbufferStorage(
                 constants::RENDERBUFFER,
                 actual_format,
                 width,
                 height,
-            )
-        );
+            ));
 
         self.size.set(Some((width, height)));
 

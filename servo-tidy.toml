@@ -13,39 +13,38 @@ lint-scripts = [
 # For each blocked package, we can list the exceptions,
 # which are packages allowed to use the blocked package.
 [blocked-packages]
+num = []
 rand = [
-  "deque",
+  "crossbeam-channel",  # Used to initialize a thread-local
   "gaol",
-  "hashglobe", # only uses in tests
+  "hashglobe", # Only used in tests
   "ipc-channel",
-  "num-bigint",
   "parking_lot_core",
   "phf_generator",
-  "rayon",
+  "rand",
   "rayon-core",
   "servo_rand",
-  "servo-websocket",
-  "tempdir",
   "tempfile",
   "uuid",
   "ws",
-  "rand",
-]
-num = [
-  "chrono",
 ]
 
 [ignore]
 # Ignored packages with duplicated versions
 packages = [
   "bitflags",
+  "crossbeam-epoch",
+  "crossbeam-utils",
   "log",
-  "rand",
-  "winapi",
-
-  "syn",
-  "quote",
+  # TODO: remove num-rational when https://github.com/PistonDevelopers/image/pull/809 is merged.
+  "num-rational",
   "proc-macro2",
+  "quote",
+  "rand",
+  # TODO: remove slab when #21426 lands
+  "slab",
+  "syn",
+  "winapi",
 ]
 # Files that are ignored for all tidy and lint checks.
 files = [
@@ -59,6 +58,7 @@ files = [
   "./resources/hsts_preload.json",
   "./tests/wpt/metadata/MANIFEST.json",
   "./support/android/openssl.sh",
+  "./support/linux/gstreamer/gstreamer.sh",
   # Upstream code from Khronos/WebGL uses tabs for indentation
   "./tests/wpt/webgl/tests",
   # Our import script is not currently respecting the lint.
@@ -68,6 +68,9 @@ files = [
   "./tests/wpt/mozilla/tests/css/fonts",
   "./tests/wpt/mozilla/tests/css/pre_with_tab.html",
   "./tests/wpt/mozilla/tests/mozilla/textarea_placeholder.html",
+  # Python 3 syntax causes "E901 SyntaxError" when flake8 runs in Python 2
+  "./etc/taskcluster/decision-task.py",
+  "./etc/taskcluster/decisionlib.py",
 ]
 # Directories that are ignored for the non-WPT tidy check.
 directories = [

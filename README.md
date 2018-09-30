@@ -54,14 +54,14 @@ Please select your operating system:
 #### On macOS (homebrew)
 
 ``` sh
-brew install automake autoconf@2.13 pkg-config python cmake yasm
+brew install automake autoconf@2.13 pkg-config python cmake yasm llvm
 brew install gstreamer gst-plugins-base gst-plugins-good       gst-plugins-bad gst-plugins-ugly gst-libav gst-rtsp-server       --with-orc -with-libogg --with-opus --with-pango --with-theora       --with-libvorbis
 pip install virtualenv
 ```
 #### On macOS (MacPorts)
 
 ``` sh
-sudo port install python27 py27-virtualenv cmake yasm
+sudo port install python27 py27-virtualenv cmake yasm llvm
 ```
 #### On macOS >= 10.11 (El Capitan), you also have to install OpenSSL
 
@@ -78,6 +78,10 @@ If you've already partially compiled servo but forgot to do this step, run `./ma
 
 #### On Debian-based Linuxes
 
+Please run `./mach bootstrap`.
+
+If this doesn't work, file a bug, and, run the commands below:
+
 ``` sh
 sudo apt install git curl autoconf libx11-dev \
     libfreetype6-dev libgl1-mesa-dri libglib2.0-dev xorg-dev \
@@ -89,23 +93,64 @@ sudo apt install git curl autoconf libx11-dev \
 ```
 
 If you using a version prior to **Ubuntu 17.04** or **Debian Sid**, replace `libssl1.0-dev` with `libssl-dev`.
+Additionally, you'll need a local copy of GStreamer with a version later than 12.0. You can place it in `support/linux/gstreamer/gstreamer`, or run `./mach bootstrap-gstreamer` to set it up.
 
 If you are using **Ubuntu 16.04** run `export HARFBUZZ_SYS_NO_PKG_CONFIG=1` before building to avoid an error with harfbuzz.
 
-If you are on **Ubuntu 14.04** and encountered errors on installing these dependencies involving `libcheese`, see [#6158](https://github.com/servo/servo/issues/6158) for a workaround.
+If you are on **Ubuntu 14.04** and encountered errors on installing these dependencies involving `libcheese`, see [#6158](https://github.com/servo/servo/issues/6158) for a workaround. You may also need to install gcc 4.9, clang 4.0, and cmake 3.2:
+
+<details>
+gcc 4.9:
+
+```sh
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+sudo apt-get update
+sudo apt-get install gcc-4.9 g++-4.9
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-4.9
+```
+
+clang 4.0:
+
+```sh
+wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+sudo apt-add-repository "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-4.0 main"
+sudo apt-get update
+sudo apt-get install -y clang-4.0
+```
+
+cmake 3.2:
+
+```sh
+sudo apt-get install software-properties-common
+sudo add-apt-repository ppa:george-edison55/cmake-3.x
+sudo apt-get update
+sudo apt-get install cmake
+```
+
+</details>
 
 If `virtualenv` does not exist, try `python-virtualenv`.
 
 #### On Fedora
 
+Please run `./mach bootstrap`.
+
+If this doesn't work, file a bug, and, run the commands below:
+
 ``` sh
 sudo dnf install curl libtool gcc-c++ libXi-devel \
     freetype-devel mesa-libGL-devel mesa-libEGL-devel glib2-devel libX11-devel libXrandr-devel gperf \
-    fontconfig-devel cabextract ttmkfdir python python-virtualenv python-pip expat-devel \
+    fontconfig-devel cabextract ttmkfdir python2 python2-virtualenv python2-pip expat-devel \
     rpm-build openssl-devel cmake bzip2-devel libXcursor-devel libXmu-devel mesa-libOSMesa-devel \
-    dbus-devel ncurses-devel harfbuzz-devel ccache mesa-libGLU-devel clang clang-libs gstreamer autoconf213
+    dbus-devel ncurses-devel harfbuzz-devel ccache mesa-libGLU-devel clang clang-libs gstreamer1-devel \
+    gstreamer1-plugins-base-devel gstreamer1-plugins-bad-free-devel autoconf213
 ```
 #### On CentOS
+
+
+Please run `./mach bootstrap`.
+
+If this doesn't work, file a bug, and, run the commands below:
 
 ``` sh
 sudo yum install curl libtool gcc-c++ libXi-devel \
@@ -132,13 +177,13 @@ export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/usr/lib64
 sudo zypper install libX11-devel libexpat-devel libbz2-devel Mesa-libEGL-devel Mesa-libGL-devel cabextract cmake \
     dbus-1-devel fontconfig-devel freetype-devel gcc-c++ git glib2-devel gperf \
     harfbuzz-devel libOSMesa-devel libXcursor-devel libXi-devel libXmu-devel libXrandr-devel libopenssl-devel \
-    python-pip python-virtualenv rpm-build glu-devel ccache llvm-clang libclang 
+    python-pip python-virtualenv rpm-build glu-devel ccache llvm-clang libclang
 ```
 #### On Arch Linux
 
 ``` sh
 sudo pacman -S --needed base-devel git python2 python2-virtualenv python2-pip mesa cmake bzip2 libxmu glu \
-    pkg-config ttf-fira-sans harfbuzz ccache clang 
+    pkg-config ttf-fira-sans harfbuzz ccache clang autoconf2.13
 ```
 #### On Gentoo Linux
 
@@ -169,7 +214,7 @@ pip install virtualenv
 ```
  If this does not work, you may need to reboot for the changed PATH settings (by the python installer) to take effect.
 
-3. Install the most recent [GStreamer](https://gstreamer.freedesktop.org/data/pkg/windows/) development package following [these instructions](https://github.com/sdroege/gstreamer-rs#gstreamer-binaries-1).
+3. Install the most recent [GStreamer](https://gstreamer.freedesktop.org/data/pkg/windows/) development package following [these instructions](https://github.com/sdroege/gstreamer-rs#gstreamer-binaries-1). You will also need to add `C:\gstreamer\1.0\x86_64\bin` to your `LIB` environment variable.
 
 4. Install Git for Windows (https://git-scm.com/download/win). DO allow it to add git.exe to the PATH (default
 settings for the installer are fine).

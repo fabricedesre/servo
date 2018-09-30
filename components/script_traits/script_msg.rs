@@ -92,7 +92,13 @@ pub enum ScriptMsg {
     InitiateNavigateRequest(RequestInit, /* cancellation_chan */ IpcReceiver<()>),
     /// Broadcast a storage event to every same-origin pipeline.
     /// The strings are key, old value and new value.
-    BroadcastStorageEvent(StorageType, ServoUrl, Option<String>, Option<String>, Option<String>),
+    BroadcastStorageEvent(
+        StorageType,
+        ServoUrl,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+    ),
     /// Indicates whether this pipeline is currently running animations.
     ChangeRunningAnimationsState(AnimationState),
     /// Requests that a new 2D canvas thread be created. (This is done in the constellation because
@@ -102,14 +108,23 @@ pub enum ScriptMsg {
     Focus,
     /// Requests that the constellation retrieve the current contents of the clipboard
     GetClipboardContents(IpcSender<String>),
-    /// Get the browsing context id for a given pipeline.
-    GetBrowsingContextId(PipelineId, IpcSender<Option<BrowsingContextId>>),
-    /// Get the parent info for a given pipeline.
-    GetParentInfo(PipelineId, IpcSender<Option<PipelineId>>),
     /// Get the top-level browsing context info for a given browsing context.
-    GetTopForBrowsingContext(BrowsingContextId, IpcSender<Option<TopLevelBrowsingContextId>>),
+    GetTopForBrowsingContext(
+        BrowsingContextId,
+        IpcSender<Option<TopLevelBrowsingContextId>>,
+    ),
+    /// Get the browsing context id of the browsing context in which pipeline is
+    /// embedded and the parent pipeline id of that browsing context.
+    GetBrowsingContextInfo(
+        PipelineId,
+        IpcSender<Option<(BrowsingContextId, Option<PipelineId>)>>,
+    ),
     /// Get the nth child browsing context ID for a given browsing context, sorted in tree order.
-    GetChildBrowsingContextId(BrowsingContextId, usize, IpcSender<Option<BrowsingContextId>>),
+    GetChildBrowsingContextId(
+        BrowsingContextId,
+        usize,
+        IpcSender<Option<BrowsingContextId>>,
+    ),
     /// All pending loads are complete, and the `load` event for this pipeline
     /// has been dispatched.
     LoadComplete,
@@ -142,7 +157,10 @@ pub enum ScriptMsg {
     /// A load of the initial `about:blank` has been completed in an IFrame.
     ScriptNewIFrame(IFrameLoadInfo, IpcSender<LayoutControlMsg>),
     /// Script has opened a new auxiliary browsing context.
-    ScriptNewAuxiliary(AuxiliaryBrowsingContextLoadInfo, IpcSender<LayoutControlMsg>),
+    ScriptNewAuxiliary(
+        AuxiliaryBrowsingContextLoadInfo,
+        IpcSender<LayoutControlMsg>,
+    ),
     /// Requests that the constellation set the contents of the clipboard
     SetClipboardContents(String),
     /// Mark a new document as active
@@ -185,8 +203,7 @@ impl fmt::Debug for ScriptMsg {
             CreateCanvasPaintThread(..) => "CreateCanvasPaintThread",
             Focus => "Focus",
             GetClipboardContents(..) => "GetClipboardContents",
-            GetBrowsingContextId(..) => "GetBrowsingContextId",
-            GetParentInfo(..) => "GetParentInfo",
+            GetBrowsingContextInfo(..) => "GetBrowsingContextInfo",
             GetTopForBrowsingContext(..) => "GetParentBrowsingContext",
             GetChildBrowsingContextId(..) => "GetChildBrowsingContextId",
             LoadComplete => "LoadComplete",

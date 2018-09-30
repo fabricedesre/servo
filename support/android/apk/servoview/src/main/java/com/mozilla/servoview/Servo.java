@@ -7,10 +7,13 @@ package com.mozilla.servoview;
 
 import android.app.Activity;
 import android.content.res.AssetManager;
+import android.content.Context;
 import android.util.Log;
 
 import java.io.IOException;
 import java.io.InputStream;
+
+import org.freedesktop.gstreamer.GStreamer;
 
 public class Servo {
     private static final String LOGTAG = "Servo";
@@ -24,8 +27,11 @@ public class Servo {
             GfxCallbacks gfxcb,
             Client client,
             Activity activity,
-            String args, String url,
-            int width, int height, boolean log) {
+            String args,
+            String url,
+            String logstr,
+            int width, int height,
+            float density, boolean log) {
 
         mRunCallback = runCallback;
 
@@ -34,8 +40,14 @@ public class Servo {
         Callbacks cbs = new Callbacks(client, gfxcb);
 
         mRunCallback.inGLThread(() -> {
-            mJNI.init(activity, args, url, cbs, width, height, log);
+            mJNI.init(activity, args, url, logstr, cbs, width, height, density, log);
         });
+
+        try {
+          GStreamer.init((Context) activity);
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
     }
 
     public String version() {
