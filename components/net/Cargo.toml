@@ -16,7 +16,7 @@ doctest = false
 
 [dependencies]
 async-recursion = "0.3.2"
-async-tungstenite = { version = "0.9", features = ["tokio-openssl"] }
+async-tungstenite = { version = "0.20", features = ["tokio-openssl"] }
 base64 = "0.10.1"
 brotli = "3"
 bytes = "1"
@@ -61,9 +61,8 @@ servo_url = { path = "../url" }
 sha2 = "0.10"
 time = "0.1.41"
 tokio = { version = "1", package = "tokio", features = ["sync", "macros", "rt-multi-thread"] }
-tokio2 = { version = "0.2", package = "tokio", features = ["sync", "macros", "rt-threaded", "tcp"] }
 tokio-stream = "0.1"
-tungstenite = "0.11"
+tungstenite = "0.18"
 url = "2.0"
 uuid = { version = "0.8", features = ["v4"] }
 webrender_api = { git = "https://github.com/servo/webrender" }

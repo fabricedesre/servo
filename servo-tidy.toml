@@ -61,9 +61,7 @@ packages = [
   # https://github.com/servo/servo/issues/26933
   "futures",
   "mio",
-  "tokio-openssl",
   "tokio",
-  "tokio-macros",
   "tokio-util",
   "http-body",
   "httpdate",
@@ -88,7 +86,6 @@ packages = [
   # Duplicated by webrender debugger via ws
   "digest",
   "generic-array",
-  "opaque-debug",
   "sha-1",
   "block-buffer",
 

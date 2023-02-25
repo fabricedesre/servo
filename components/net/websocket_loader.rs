@@ -33,12 +33,12 @@ use servo_url::ServoUrl;
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use tokio2::net::TcpStream;
-use tokio2::runtime::Runtime;
-use tokio2::select;
-use tokio2::sync::mpsc::{unbounded_channel, UnboundedReceiver};
-use tungstenite::error::Error;
+use tokio::net::TcpStream;
+use tokio::runtime::Runtime;
+use tokio::select;
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 use tungstenite::error::Result as WebSocketResult;
+use tungstenite::error::{Error, ProtocolError, UrlError};
 use tungstenite::handshake::client::{Request, Response};
 use tungstenite::http::header::{self as WSHeader, HeaderValue as WSHeaderValue};
 use tungstenite::protocol::CloseFrame;
@@ -112,9 +112,9 @@ fn process_ws_response(
     if let Some(protocol_name) = response.headers().get("Sec-WebSocket-Protocol") {
         let protocol_name = protocol_name.to_str().unwrap();
         if !protocols.is_empty() && !protocols.iter().any(|p| protocol_name == (*p)) {
-            return Err(Error::Protocol(
-                "Protocol in use not in client-supplied protocol list".into(),
-            ));
+            return Err(Error::Protocol(ProtocolError::InvalidHeader(
+                HeaderName::from_static("Sec-WebSocket-Protocol"),
+            )));
         }
         protocol_in_use = Some(protocol_name.to_string());
     }
@@ -283,6 +283,10 @@ async fn run_ws_loop(
                         ));
                         break;
                     }
+
+                    Message::Frame(_) => {
+                        warn!("Unexpected websocket frame message");
+                    }
                 }
             }
         }
@@ -309,20 +313,20 @@ async fn start_websocket(
     let host_str = client
         .uri()
         .host()
-        .ok_or_else(|| Error::Url("No host string".into()))?;
+        .ok_or_else(|| Error::Url(UrlError::NoHostName))?;
     let host = replace_host(host_str);
-    let mut net_url =
-        Url::parse(&client.uri().to_string()).map_err(|e| Error::Url(e.to_string().into()))?;
+    let mut net_url = Url::parse(&client.uri().to_string())
+        .map_err(|e| Error::Url(UrlError::UnableToConnect(e.to_string())))?;
     net_url
         .set_host(Some(&host))
-        .map_err(|e| Error::Url(e.to_string().into()))?;
+        .map_err(|e| Error::Url(UrlError::UnableToConnect(e.to_string())))?;
 
     let domain = net_url
         .host()
-        .ok_or_else(|| Error::Url("No host string".into()))?;
+        .ok_or_else(|| Error::Url(UrlError::NoHostName))?;
     let port = net_url
         .port_or_known_default()
-        .ok_or_else(|| Error::Url("Unknown port".into()))?;
+        .ok_or_else(|| Error::Url(UrlError::UnableToConnect("Unknown port".into())))?;
 
     let try_socket = TcpStream::connect((&*domain.to_string(), port)).await;
     let socket = try_socket.map_err(Error::Io)?;
