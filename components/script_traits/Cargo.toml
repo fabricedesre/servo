@@ -41,7 +41,7 @@ smallvec = "1.9"
 style_traits = { path = "../style_traits", features = ["servo"] }
 time = "0.1.41"
 uuid = { version = "0.8", features = ["v4"] }
-webdriver = "0.44"
+webdriver = "0.47"
 webgpu = { path = "../webgpu" }
 webrender_api = { git = "https://github.com/servo/webrender" }
 webxr-api = { git = "https://github.com/servo/webxr", features = ["ipc"] }

@@ -112,7 +112,7 @@ unicode-segmentation = "1.1.0"
 url = "2.0"
 utf-8 = "0.7"
 uuid = { version = "0.8", features = ["v4", "serde"] }
-webdriver = "0.44"
+webdriver = "0.47"
 webgpu = { path = "../webgpu" }
 webrender_api = { git = "https://github.com/servo/webrender" }
 webxr-api = { git = "https://github.com/servo/webxr", features = ["ipc"] }
