@@ -92,17 +92,26 @@ struct ListProcessesResponse {
     processes: Vec<ProcessForm>,
 }
 
+// TODO: share with TabDescriptorTraits
+#[derive(Default, Serialize)]
+pub struct ProcessFormTraits {
+    watcher: bool,
+    supportsReloadDescriptor: bool,
+}
+
 #[derive(Serialize)]
 struct ProcessForm {
     actor: String,
     id: u32,
     isParent: bool,
+    isWindowlessParent: bool,
+    traits: ProcessFormTraits,
 }
 
 #[derive(Serialize)]
 struct GetProcessResponse {
     from: String,
-    form: ProcessForm,
+    processDescriptor: ProcessForm,
 }
 
 pub struct RootActor {
@@ -123,7 +132,7 @@ impl Actor for RootActor {
         &self,
         registry: &ActorRegistry,
         msg_type: &str,
-        _msg: &Map<String, Value>,
+        msg: &Map<String, Value>,
         stream: &mut TcpStream,
         _id: StreamId,
     ) -> Result<ActorMessageStatus, ()> {
@@ -144,6 +153,8 @@ impl Actor for RootActor {
                         actor: self.process.clone(),
                         id: 0,
                         isParent: true,
+                        isWindowlessParent: false,
+                        traits: Default::default(),
                     }],
                 };
                 let _ = stream.write_json_packet(&reply);
@@ -153,10 +164,12 @@ impl Actor for RootActor {
             "getProcess" => {
                 let reply = GetProcessResponse {
                     from: self.name(),
-                    form: ProcessForm {
+                    processDescriptor: ProcessForm {
                         actor: self.process.clone(),
                         id: 0,
                         isParent: true,
+                        isWindowlessParent: false,
+                        traits: Default::default(),
                     },
                 };
                 let _ = stream.write_json_packet(&reply);
@@ -175,7 +188,7 @@ impl Actor for RootActor {
                 ActorMessageStatus::Processed
             },
 
-            // https://docs.firefox-dev.tools/backend/protocol.html#listing-browser-tabs
+            // https://firefox-source-docs.mozilla.org/devtools/backend/protocol.html#listing-browser-tabs
             "listTabs" => {
                 let actor = ListTabsReply {
                     from: "root".to_owned(),
@@ -186,7 +199,7 @@ impl Actor for RootActor {
                         .map(|target| {
                             registry
                                 .find::<TabDescriptorActor>(target)
-                                .encodable(&registry)
+                                .encodable(&registry, false)
                         })
                         .collect(),
                 };
@@ -217,13 +230,28 @@ impl Actor for RootActor {
             },
 
             "getTab" => {
-                let tab = registry.find::<TabDescriptorActor>(&self.tabs[0]);
-                let reply = GetTabReply {
-                    from: self.name(),
-                    tab: tab.encodable(&registry),
-                };
-                let _ = stream.write_json_packet(&reply);
-                ActorMessageStatus::Processed
+                if let Some(serde_json::Value::Number(browserId)) = msg.get("browserId") {
+                    println!("ZZZ getTab {:?}", browserId);
+
+                    // TODO: actually find the right tab...
+                    let targetTab = Some(self.tabs[0].clone());
+
+                    if let Some(tab) = targetTab {
+                        let actor = registry.find::<TabDescriptorActor>(&tab);
+                        let reply = GetTabReply {
+                            from: self.name(),
+                            tab: actor.encodable(&registry, true),
+                        };
+                        let _ = stream.write_json_packet(&reply);
+                        ActorMessageStatus::Processed
+                    } else {
+                        // TODO: should we send back an error packet instead?
+                        ActorMessageStatus::Ignored
+                    }
+                } else {
+                    // TODO: should we send back an error packet instead?
+                    ActorMessageStatus::Ignored
+                }
             },
 
             "protocolDescription" => {

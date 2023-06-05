@@ -184,7 +184,7 @@ impl ActorRegistry {
                 if actor.handle_message(self, msg_type, msg, stream, id)? !=
                     ActorMessageStatus::Processed
                 {
-                    debug!(
+                    warn!(
                         "unexpected message type \"{}\" found for actor \"{}\"",
                         msg_type, to
                     );
